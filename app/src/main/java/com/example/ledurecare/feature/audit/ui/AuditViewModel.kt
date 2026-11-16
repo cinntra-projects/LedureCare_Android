@@ -1,0 +1,337 @@
+package com.example.ledurecare.feature.audit.ui
+
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.ledurecare.core.common.AppError
+import com.example.ledurecare.core.common.AppResult
+import com.example.ledurecare.feature.audit.domain.AuditDraft
+import com.example.ledurecare.feature.audit.domain.AuditField
+import com.example.ledurecare.feature.audit.domain.EntryField
+import com.example.ledurecare.feature.audit.domain.GetAuditOptionsUseCase
+import com.example.ledurecare.feature.audit.domain.ItemInput
+import com.example.ledurecare.feature.audit.domain.MAX_FILE_BYTES
+import com.example.ledurecare.feature.audit.domain.SubmitAuditUseCase
+import com.example.ledurecare.feature.audit.domain.toItem
+import com.example.ledurecare.feature.audit.domain.validateAudit
+import com.example.ledurecare.feature.audit.domain.validateItem
+import com.example.ledurecare.feature.dealers.domain.Dealer
+import com.example.ledurecare.feature.dealers.domain.GetDealerDetailsUseCase
+import com.example.ledurecare.feature.dealers.domain.SearchDealersUseCase
+import com.example.ledurecare.feature.dealers.ui.DealerSearchController
+import com.example.ledurecare.feature.plan.domain.GetVisitUseCase
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.time.Clock
+import java.time.LocalDate
+import javax.inject.Inject
+
+private const val MAX_DIGITS = 6
+
+private fun String.digits() = filter(Char::isDigit).take(MAX_DIGITS)
+
+@HiltViewModel
+class AuditViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
+    private val getVisit: GetVisitUseCase,
+    private val searchDealers: SearchDealersUseCase,
+    private val getDealerDetails: GetDealerDetailsUseCase,
+    private val getOptions: GetAuditOptionsUseCase,
+    private val submitAudit: SubmitAuditUseCase,
+    clock: Clock,
+) : ViewModel() {
+
+    // Navigation argument, stored under its property name (see AuditDestination).
+    private val visitId: Long = checkNotNull(savedStateHandle.get<Long>("visitId")) { "Visit id missing" }
+
+    private val today = LocalDate.now(clock)
+    private val _state = MutableStateFlow(AuditUiState(today = today, inspectionDate = today))
+    val state: StateFlow<AuditUiState> = _state.asStateFlow()
+
+    private val _effects = Channel<AuditEffect>(Channel.BUFFERED)
+    val effects = _effects.receiveAsFlow()
+
+    private var nextItemId = 1L
+
+    // The dealer picker searches and pages on the server; its state is mirrored into the form state.
+    private val dealerSearch = DealerSearchController(searchDealers, viewModelScope)
+
+    init {
+        viewModelScope.launch { dealerSearch.state.collect { search -> _state.update { it.copy(dealerSearch = search) } } }
+        load()
+    }
+
+    fun onEvent(event: AuditEvent) {
+        when (event) {
+            AuditEvent.Retry -> load()
+
+            AuditEvent.OpenDealerPicker -> dealerSearch.reset()
+            is AuditEvent.DealerQueryChanged -> dealerSearch.setQuery(event.query)
+            AuditEvent.LoadMoreDealers -> dealerSearch.loadMore()
+            AuditEvent.RetryDealers -> dealerSearch.retry()
+            is AuditEvent.DealerSelected -> selectDealer(event.dealer)
+            is AuditEvent.AddressChanged -> field(AuditField.Address) { it.copy(address = event.value) }
+            is AuditEvent.CustomerCodeChanged -> field(AuditField.CustomerCode) { it.copy(customerCode = event.value) }
+            is AuditEvent.SalesPersonChanged -> field(AuditField.SalesPerson) { it.copy(salesPerson = event.value) }
+            is AuditEvent.InspectionDateChanged -> field(AuditField.InspectionDate) { it.copy(inspectionDate = event.date) }
+            is AuditEvent.TotalBoxChanged -> field(AuditField.TotalBox) { it.copy(totalBox = event.value.digits()) }
+
+            is AuditEvent.ProductQueryChanged -> entry(EntryField.Product) {
+                it.copy(productQuery = event.value, product = null)
+            }
+            is AuditEvent.ProductSelected -> entry(EntryField.Product) {
+                it.copy(productQuery = "${event.product.code} · ${event.product.name}", product = event.product)
+            }
+            is AuditEvent.QtyChanged -> entry(EntryField.Qty, EntryField.Approved) { it.copy(qty = event.value.digits()) }
+            is AuditEvent.ApprovedChanged -> entry(EntryField.Approved) {
+                val approved = event.value.digits()
+                it.copy(
+                    approved = approved,
+                    totalApproved = if (it.totalApprovedEdited) it.totalApproved else approved.ifEmpty { "0" },
+                )
+            }
+            is AuditEvent.RejectedChanged -> entry(EntryField.Approved) { it.copy(rejected = event.value.digits()) }
+            is AuditEvent.TotalApprovedChanged -> entry(EntryField.Approved) {
+                it.copy(totalApproved = event.value.digits(), totalApprovedEdited = true)
+            }
+            is AuditEvent.MfgTypeChanged -> entry(EntryField.MfgType, EntryField.MfgPeriod) {
+                // Month and quarter numbers mean different things, so a new type clears the old pick.
+                if (it.mfgType == event.type) it else it.copy(mfgType = event.type, mfgPeriod = null)
+            }
+            is AuditEvent.MfgPeriodChanged -> entry(EntryField.MfgPeriod) { it.copy(mfgPeriod = event.period) }
+            is AuditEvent.MfgYearChanged -> entry(EntryField.MfgYear) { it.copy(mfgYear = event.year) }
+            is AuditEvent.MfgPicked -> entry(EntryField.MfgType, EntryField.MfgPeriod, EntryField.MfgYear) {
+                it.copy(mfgType = event.type, mfgPeriod = event.period, mfgYear = event.year)
+            }
+            AuditEvent.MfgCleared -> entry { it.copy(mfgType = null, mfgPeriod = null, mfgYear = null) }
+            is AuditEvent.ConditionChanged -> entry(EntryField.Condition) { it.copy(condition = event.condition) }
+            is AuditEvent.WarrantyChanged -> entry(EntryField.Warranty, EntryField.Remark) { it.copy(warranty = event.warranty) }
+            is AuditEvent.RemarkChanged -> entry(EntryField.Remark) { it.copy(remark = event.value) }
+            AuditEvent.AddItem -> addItem()
+            AuditEvent.CancelEdit -> _state.update { it.copy(entry = ItemEntry(), editingId = null, entryErrors = emptySet()) }
+
+            is AuditEvent.RepeatItem -> repeatItem(event.id)
+            is AuditEvent.EditItem -> editItem(event.id)
+            is AuditEvent.DeleteItem -> deleteItem(event.id)
+
+            is AuditEvent.WarehouseSelected -> field(AuditField.Warehouse) { s ->
+                s.copy(warehouse = s.options.warehouses.firstOrNull { it.id == event.warehouseId })
+            }
+            is AuditEvent.NotesChanged -> _state.update { it.copy(notes = event.value) }
+            is AuditEvent.FilesPicked -> addFiles(event.files)
+            is AuditEvent.RemoveFile -> _state.update { s -> s.copy(files = s.files.filterNot { it.uri == event.uri }) }
+            AuditEvent.Submit -> submit()
+        }
+    }
+
+    private fun load() {
+        _state.update { it.copy(isLoading = true, error = null) }
+        viewModelScope.launch {
+            val visit = getVisit(visitId)
+            val options = getOptions()
+            val failure = (options as? AppResult.Failure)?.error
+            if (failure != null || visit == null || options !is AppResult.Success) {
+                _state.update {
+                    it.copy(isLoading = false, error = failure ?: AppError.Http(404, "Planned visit not found."))
+                }
+                return@launch
+            }
+            // The plan only carries the dealer's name and code; the address etc. are fetched below.
+            val dealer = Dealer(visit.dealerId, visit.dealerName, visit.bpCode, visit.city)
+            _state.update {
+                it.copy(
+                    isLoading = false,
+                    startedFrom = visit.date,
+                    options = options.data,
+                    // With one warehouse there is nothing to choose. With several, and no zone to go by,
+                    // the engineer picks: a wrong default could send goods to the wrong place unnoticed.
+                    warehouse = it.warehouse ?: options.data.warehouses.singleOrNull(),
+                    dealer = dealer,
+                    address = dealer.address,
+                    customerCode = dealer.bpCode,
+                    salesPerson = dealer.salesPerson,
+                )
+            }
+            fillDealerDetails(dealer)
+        }
+    }
+
+    private fun selectDealer(dealer: Dealer) {
+        _state.update { s ->
+            s.copy(
+                dealer = dealer,
+                address = dealer.address,
+                customerCode = dealer.bpCode,
+                salesPerson = dealer.salesPerson,
+                errors = s.errors - setOf(AuditField.Dealer, AuditField.Address, AuditField.CustomerCode, AuditField.SalesPerson),
+            )
+        }
+        fillDealerDetails(dealer)
+    }
+
+    private var detailsJob: Job? = null
+
+    /**
+     * Asks the business-partner server for [dealer]'s address, sales person and zone, and fills them in.
+     * Only blank fields are filled, so something the engineer already typed is kept, and an answer for a
+     * dealer that is no longer chosen is dropped. A failed lookup leaves the fields to be typed by hand.
+     */
+    private fun fillDealerDetails(dealer: Dealer) {
+        detailsJob?.cancel()
+        detailsJob = viewModelScope.launch {
+            val details = (getDealerDetails(dealer) as? AppResult.Success)?.data ?: return@launch
+            _state.update { s ->
+                if (s.dealer?.id != dealer.id) s
+                else s.copy(
+                    dealer = details,
+                    address = s.address.ifBlank { details.address },
+                    salesPerson = s.salesPerson.ifBlank { details.salesPerson },
+                )
+            }
+        }
+    }
+
+    /** Applies [change] and clears the error for [field]. */
+    private fun field(field: AuditField, change: (AuditUiState) -> AuditUiState) =
+        _state.update { change(it).copy(errors = it.errors - field) }
+
+    /** Applies [change] to the item panel and clears the errors for [clears]. */
+    private fun entry(vararg clears: EntryField, change: (ItemEntry) -> ItemEntry) =
+        _state.update { it.copy(entry = change(it.entry), entryErrors = it.entryErrors - clears.toSet()) }
+
+    private fun ItemEntry.toInput() = ItemInput(
+        product = product,
+        qty = qty.toIntOrNull(),
+        approved = approved.toIntOrNull(),
+        rejected = rejected.toIntOrNull(),
+        totalApproved = totalApproved.toIntOrNull(),
+        mfgType = mfgType,
+        mfgPeriod = mfgPeriod,
+        mfgYear = mfgYear,
+        condition = condition,
+        warranty = warranty,
+        remark = remark,
+    )
+
+    private fun addItem() {
+        val s = _state.value
+        val input = s.entry.toInput()
+        val problems = validateItem(input)
+        if (problems.isNotEmpty()) {
+            _state.update { it.copy(entryErrors = problems) }
+            return
+        }
+        val editing = s.editingId
+        val item = input.toItem(editing ?: nextItemId++) ?: return
+        _state.update {
+            it.copy(
+                items = if (editing == null) it.items + item else it.items.map { old -> if (old.id == editing) item else old },
+                entry = ItemEntry(),
+                editingId = null,
+                entryErrors = emptySet(),
+                errors = it.errors - AuditField.Items,
+                warehouse = it.warehouse ?: it.options.warehouses.singleOrNull(),
+            )
+        }
+    }
+
+    private fun repeatItem(id: Long) = _state.update { s ->
+        val index = s.items.indexOfFirst { it.id == id }
+        if (index < 0) return@update s
+        val copy = s.items[index].copy(
+            id = nextItemId++,
+            qty = 1,
+            approved = 0,
+            rejected = 0,
+            totalApproved = 0,
+            copied = true,
+        )
+        s.copy(items = s.items.toMutableList().apply { add(index + 1, copy) })
+    }
+
+    private fun editItem(id: Long) = _state.update { s ->
+        val item = s.items.firstOrNull { it.id == id } ?: return@update s
+        s.copy(
+            editingId = id,
+            entryErrors = emptySet(),
+            entry = ItemEntry(
+                productQuery = "${item.product.code} · ${item.product.name}",
+                product = item.product,
+                qty = item.qty.toString(),
+                approved = item.approved.toString(),
+                rejected = item.rejected.toString(),
+                totalApproved = item.totalApproved.toString(),
+                totalApprovedEdited = true,
+                mfgType = item.mfgType,
+                mfgPeriod = item.mfgPeriod,
+                mfgYear = item.mfgYear,
+                condition = item.condition,
+                warranty = item.warranty,
+                remark = item.remark,
+            ),
+        )
+    }
+
+    private fun deleteItem(id: Long) = _state.update { s ->
+        val leavingEdit = s.editingId == id
+        s.copy(
+            items = s.items.filterNot { it.id == id },
+            editingId = if (leavingEdit) null else s.editingId,
+            entry = if (leavingEdit) ItemEntry() else s.entry,
+        )
+    }
+
+    private fun addFiles(picked: List<com.example.ledurecare.feature.audit.domain.AuditFile>) {
+        val (allowed, tooLarge) = picked.partition { it.sizeBytes <= MAX_FILE_BYTES }
+        _state.update { s ->
+            val known = s.files.map { it.uri }.toSet()
+            s.copy(files = s.files + allowed.filter { it.uri !in known })
+        }
+        if (tooLarge.isNotEmpty()) {
+            viewModelScope.launch { _effects.send(AuditEffect.FilesRejected(tooLarge.map { it.name })) }
+        }
+    }
+
+    private fun draft(s: AuditUiState) = AuditDraft(
+        dealer = s.dealer,
+        address = s.address.trim(),
+        customerCode = s.customerCode.trim(),
+        salesPerson = s.salesPerson.trim(),
+        inspectionDate = s.inspectionDate,
+        totalBox = s.totalBox.toIntOrNull(),
+        totalQty = s.totalQty,
+        items = s.items,
+        warehouse = s.warehouse,
+        notes = s.notes.trim(),
+        files = s.files,
+    )
+
+    private fun submit() {
+        val s = _state.value
+        if (s.isSubmitting) return
+        val draft = draft(s)
+        val problems = validateAudit(draft)
+        if (problems.isNotEmpty()) {
+            _state.update { it.copy(errors = problems) }
+            viewModelScope.launch { _effects.send(AuditEffect.FixErrors) }
+            return
+        }
+        _state.update { it.copy(isSubmitting = true, submitError = null) }
+        viewModelScope.launch {
+            when (val result = submitAudit(visitId, draft)) {
+                is AppResult.Success -> {
+                    _state.update { it.copy(isSubmitting = false) }
+                    _effects.send(AuditEffect.Submitted(result.data.dliNo))
+                }
+                is AppResult.Failure -> _state.update { it.copy(isSubmitting = false, submitError = result.error) }
+            }
+        }
+    }
+}
