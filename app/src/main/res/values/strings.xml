@@ -180,6 +180,7 @@
     <string name="audit_warranty_out">Out of warranty</string>
     <string name="audit_remark">Remark</string>
     <string name="audit_special_remark">Special remark</string>
+    <string name="logo_care">CARE</string>
     <string name="audit_add_item">Add item</string>
     <string name="audit_update_item">Update item</string>
     <string name="audit_cancel_edit">Cancel</string>

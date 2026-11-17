@@ -56,6 +56,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import com.example.ledurecare.R
+import com.example.ledurecare.core.ui.LedureCareLogo
 import com.example.ledurecare.feature.dealers.ui.DealersRoute
 import com.example.ledurecare.feature.audit.ui.AuditDestination
 import com.example.ledurecare.feature.audit.ui.AuditFileDestination
@@ -167,13 +168,7 @@ private fun LedureTopBar(subtitle: String, onSignOut: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Image(
-                painter = painterResource(R.drawable.ledure_logo),
-                contentDescription = stringResource(R.string.login_logo_description),
-                modifier = Modifier.height(16.dp),
-                contentScale = ContentScale.FillHeight,
-                alignment = Alignment.CenterStart,
-            )
+            LedureCareLogo(height = 16.dp)
             if (subtitle.isNotBlank()) {
                 Text(subtitle, fontSize = 10.sp, color = Color.White.copy(alpha = 0.9f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

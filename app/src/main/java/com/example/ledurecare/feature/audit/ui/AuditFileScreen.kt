@@ -48,6 +48,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.ledurecare.R
+import com.example.ledurecare.core.ui.LedureCareLogo
 import com.example.ledurecare.core.ui.BackButton
 import com.example.ledurecare.core.ui.ErrorBox
 import com.example.ledurecare.core.ui.LoadingBox
@@ -222,11 +223,7 @@ private fun AuditDocument(audit: SubmittedAudit) {
                 Box(
                     Modifier.background(Green500, RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
                 ) {
-                    Image(
-                        painter = painterResource(R.drawable.ledure_logo),
-                        contentDescription = stringResource(R.string.login_logo_description),
-                        modifier = Modifier.height(11.dp),
-                    )
+                    LedureCareLogo(height = 11.dp)
                 }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                     Text(stringResource(R.string.doc_title), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = Ink)

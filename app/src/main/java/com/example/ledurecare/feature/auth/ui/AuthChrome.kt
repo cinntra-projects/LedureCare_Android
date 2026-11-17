@@ -31,27 +31,37 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ledurecare.R
+import com.example.ledurecare.core.ui.LedureCareLogo
 import com.example.ledurecare.core.ui.VideoBackground
 import com.example.ledurecare.ui.theme.GreenAccentText
 import com.example.ledurecare.ui.theme.GreenDeepBottom
 import com.example.ledurecare.ui.theme.GreenDeepTop
 
 /**
- * The look shared by every signed-out screen: the looping video, the logo and tagline, and a white
- * card holding [content]. The card sits at the bottom and scrolls when the keyboard is up.
+ * The looping video behind every signed-out screen. It is shown once, by the navigation host, so it keeps
+ * playing without a restart while the screens in front of it change.
  */
 @Composable
-fun AuthScreenFrame(
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit,
-) {
+fun AuthBackdrop(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(GreenDeepTop, GreenDeepBottom))),
     ) {
         VideoBackground(rawRes = R.raw.login_bg, modifier = Modifier.fillMaxSize())
+    }
+}
 
+/**
+ * The look shared by every signed-out screen: the logo and tagline, and a white card holding [content].
+ * The card sits at the bottom and scrolls when the keyboard is up. The video comes from [AuthBackdrop].
+ */
+@Composable
+fun AuthScreenFrame(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Box(modifier = modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -85,11 +95,7 @@ fun AuthScreenFrame(
 @Composable
 private fun Brand(modifier: Modifier = Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Image(
-            painter = painterResource(R.drawable.ledure_logo),
-            contentDescription = stringResource(R.string.login_logo_description),
-            modifier = Modifier.height(20.dp),
-        )
+        LedureCareLogo(height = 20.dp)
         Text(
             text = buildAnnotatedString {
                 append(stringResource(R.string.login_tagline_prefix))

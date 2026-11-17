@@ -1,8 +1,12 @@
 package com.example.ledurecare.navigation
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.NavDestination.Companion.hasRoute
+import com.example.ledurecare.feature.auth.ui.AuthBackdrop
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -31,10 +35,17 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val sessionViewModel: SessionViewModel = hiltViewModel()
     val sessionExpired by sessionViewModel.expired.collectAsStateWithLifecycle()
 
+    // One video behind login, OTP and forgot password: only the card in front changes between them.
+    val destination by navController.currentBackStackEntryAsState()
+    val onAuthScreen = destination?.destination.let {
+        it == null || it.hasRoute<LoginDestination>() || it.hasRoute<ForgotPasswordDestination>()
+    }
+
+    Box(modifier) {
+    if (onAuthScreen) AuthBackdrop()
     NavHost(
         navController = navController,
         startDestination = LoginDestination,
-        modifier = modifier,
     ) {
         composable<LoginDestination> {
             LoginRoute(
@@ -64,6 +75,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 }
             })
         }
+    }
     }
 
     // Shown over whatever screen the user is on when the server rejects their token.
