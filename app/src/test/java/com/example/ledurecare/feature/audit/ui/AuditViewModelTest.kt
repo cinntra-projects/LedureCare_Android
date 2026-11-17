@@ -9,7 +9,9 @@ import com.example.ledurecare.core.common.AppResult
 import com.example.ledurecare.feature.audit.domain.AuditField
 import com.example.ledurecare.feature.audit.domain.AuditFile
 import com.example.ledurecare.feature.audit.domain.EntryField
+import com.example.ledurecare.feature.audit.domain.GetAuditForEditUseCase
 import com.example.ledurecare.feature.audit.domain.GetAuditOptionsUseCase
+import com.example.ledurecare.feature.audit.domain.UpdateAuditUseCase
 import com.example.ledurecare.feature.audit.domain.MAX_FILE_BYTES
 import com.example.ledurecare.feature.audit.domain.MfgType
 import com.example.ledurecare.feature.audit.domain.Product
@@ -80,6 +82,8 @@ class AuditViewModelTest {
             GetDealerDetailsUseCase(details),
             GetAuditOptionsUseCase(FakeAuditRepository(), warehouses),
             SubmitAuditUseCase(FakeAuditRepository(), MarkVisitDoneUseCase(plan)),
+            GetAuditForEditUseCase(FakeAuditRepository()),
+            UpdateAuditUseCase(FakeAuditRepository()),
             clock,
         )
         advanceUntilIdle()

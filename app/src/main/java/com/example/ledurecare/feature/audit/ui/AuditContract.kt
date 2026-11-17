@@ -38,6 +38,9 @@ data class AuditUiState(
     val today: LocalDate,
     /** The planned visit's date, for "Started from My Plan · 28 Oct". */
     val startedFrom: LocalDate? = null,
+    /** An existing DLI is being edited; [dliNo] is its number. */
+    val isEditing: Boolean = false,
+    val dliNo: String = "",
 
     /** The dealer picker's search: its query, pages loaded so far, and loading state. */
     val dealerSearch: DealerSearchState = DealerSearchState(),

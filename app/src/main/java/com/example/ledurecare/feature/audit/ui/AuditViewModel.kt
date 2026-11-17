@@ -8,7 +8,9 @@ import com.example.ledurecare.core.common.AppResult
 import com.example.ledurecare.feature.audit.domain.AuditDraft
 import com.example.ledurecare.feature.audit.domain.AuditField
 import com.example.ledurecare.feature.audit.domain.EntryField
+import com.example.ledurecare.feature.audit.domain.GetAuditForEditUseCase
 import com.example.ledurecare.feature.audit.domain.GetAuditOptionsUseCase
+import com.example.ledurecare.feature.audit.domain.UpdateAuditUseCase
 import com.example.ledurecare.feature.audit.domain.ItemInput
 import com.example.ledurecare.feature.audit.domain.MAX_FILE_BYTES
 import com.example.ledurecare.feature.audit.domain.SubmitAuditUseCase
@@ -45,11 +47,16 @@ class AuditViewModel @Inject constructor(
     private val getDealerDetails: GetDealerDetailsUseCase,
     private val getOptions: GetAuditOptionsUseCase,
     private val submitAudit: SubmitAuditUseCase,
+    private val getAuditForEdit: GetAuditForEditUseCase,
+    private val updateAudit: UpdateAuditUseCase,
     clock: Clock,
 ) : ViewModel() {
 
-    // Navigation argument, stored under its property name (see AuditDestination).
-    private val visitId: Long = checkNotNull(savedStateHandle.get<Long>("visitId")) { "Visit id missing" }
+    // Navigation arguments, stored under their property names (see AuditDestination).
+    private val visitId: Long = savedStateHandle.get<Long>("visitId") ?: 0L
+
+    /** Set when an existing DLI is being edited instead of a new audit started from a plan. */
+    private val returnId: Int? = savedStateHandle.get<Int>("returnId")
 
     private val today = LocalDate.now(clock)
     private val _state = MutableStateFlow(AuditUiState(today = today, inspectionDate = today))
@@ -134,6 +141,7 @@ class AuditViewModel @Inject constructor(
     private fun load() {
         _state.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
+            if (returnId != null) return@launch loadForEdit(returnId)
             val visit = getVisit(visitId)
             val options = getOptions()
             val failure = (options as? AppResult.Failure)?.error
@@ -160,6 +168,37 @@ class AuditViewModel @Inject constructor(
                 )
             }
             fillDealerDetails(dealer)
+        }
+    }
+
+    /** Fills the form with the DLI being edited. */
+    private suspend fun loadForEdit(id: Int) {
+        val options = getOptions()
+        val edit = getAuditForEdit(id)
+        val failure = (options as? AppResult.Failure)?.error ?: (edit as? AppResult.Failure)?.error
+        if (failure != null || options !is AppResult.Success || edit !is AppResult.Success) {
+            _state.update { it.copy(isLoading = false, error = failure ?: AppError.Http(404, "DLI not found.")) }
+            return
+        }
+        val dli = edit.data
+        nextItemId = (dli.items.maxOfOrNull { it.id } ?: 0L) + 1
+        _state.update {
+            it.copy(
+                isLoading = false,
+                isEditing = true,
+                dliNo = dli.dliNo,
+                options = options.data,
+                dealer = dli.dealer,
+                address = dli.address,
+                customerCode = dli.customerCode,
+                salesPerson = dli.salesPerson,
+                inspectionDate = dli.inspectionDate ?: it.inspectionDate,
+                totalBox = dli.totalBox?.toString().orEmpty(),
+                items = dli.items,
+                warehouse = options.data.warehouses.firstOrNull { w -> w.id == dli.warehouseId }
+                    ?: options.data.warehouses.singleOrNull(),
+                notes = dli.notes,
+            )
         }
     }
 
@@ -325,7 +364,8 @@ class AuditViewModel @Inject constructor(
         }
         _state.update { it.copy(isSubmitting = true, submitError = null) }
         viewModelScope.launch {
-            when (val result = submitAudit(visitId, draft)) {
+            val outcome = if (returnId != null) updateAudit(returnId, draft) else submitAudit(visitId, draft)
+            when (val result = outcome) {
                 is AppResult.Success -> {
                     _state.update { it.copy(isSubmitting = false) }
                     _effects.send(AuditEffect.Submitted(result.data.dliNo))

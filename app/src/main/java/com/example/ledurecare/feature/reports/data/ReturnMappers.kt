@@ -45,6 +45,7 @@ internal fun ReturnListDto.toDomain(today: LocalDate): Dli? {
         daysInStage = daysSince(parseDate(statusChangedAt) ?: audit, today),
         isOverSla = sla.isOverSla(),
         auditedBy = createdByName?.takeIf { it.isNotBlank() },
+        isEditable = isEditable,
     )
 }
 

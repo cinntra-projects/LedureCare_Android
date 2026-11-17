@@ -127,7 +127,7 @@ fun HomeRoute(
                 }
             }
             composable<DealersTab> { DealersRoute() }
-            reportsGraph(tabController)
+            reportsGraph(tabController, onEditDli = { tabController.navigate(AuditDestination(returnId = it)) })
         }
     }
 }

@@ -3,6 +3,7 @@ package com.example.ledurecare.feature.audit.data
 import com.example.ledurecare.core.common.AppError
 import com.example.ledurecare.core.common.AppResult
 import com.example.ledurecare.feature.audit.domain.AuditDraft
+import com.example.ledurecare.feature.audit.domain.AuditEdit
 import com.example.ledurecare.feature.audit.domain.AuditCatalog
 import com.example.ledurecare.feature.audit.domain.AuditRepository
 import com.example.ledurecare.feature.audit.domain.GeneratedFile
@@ -46,6 +47,10 @@ class FakeAuditRepository @Inject constructor() : AuditRepository {
         submitted[dliNo] = record
         return AppResult.Success(record)
     }
+
+    override suspend fun getForEdit(returnId: Int): AppResult<AuditEdit> = AppResult.Failure(AppError.Http(404, "Not available in sample mode."))
+
+    override suspend fun update(returnId: Int, draft: AuditDraft): AppResult<SubmittedAudit> = submit(draft)
 
     override suspend fun getSubmitted(dliNo: String): AppResult<SubmittedAudit> =
         submitted[dliNo]?.let { AppResult.Success(it) }

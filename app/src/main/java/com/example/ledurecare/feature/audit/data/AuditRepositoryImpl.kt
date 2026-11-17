@@ -8,6 +8,12 @@ import com.example.ledurecare.core.common.IoDispatcher
 import com.example.ledurecare.core.common.safeCall
 import com.example.ledurecare.core.network.unwrapObject
 import com.example.ledurecare.feature.audit.domain.AuditCatalog
+import com.example.ledurecare.feature.audit.domain.AuditEdit
+import com.example.ledurecare.feature.audit.domain.Product
+import com.example.ledurecare.feature.dealers.domain.Dealer
+import com.example.ledurecare.feature.reports.data.ReturnDetailDto
+import com.example.ledurecare.feature.reports.data.ReturnItemDto
+import com.example.ledurecare.feature.reports.data.parseDate
 import com.example.ledurecare.feature.audit.domain.AuditDraft
 import com.example.ledurecare.feature.audit.domain.AuditFile
 import com.example.ledurecare.feature.audit.domain.AuditItem
@@ -58,6 +64,8 @@ data class CreateItemDto(
     @SerialName("mfg_year") val mfgYear: Int,
     val remarks: String = "",
     @SerialName("warranty_status") val warrantyStatus: String,
+    /** The special remark, sent only when the item is out of warranty. */
+    @SerialName("warranty_remarks") val warrantyRemarks: String? = null,
 )
 
 internal fun AuditItem.toCreateDto() = CreateItemDto(
@@ -75,7 +83,55 @@ internal fun AuditItem.toCreateDto() = CreateItemDto(
     mfgYear = mfgYear,
     remarks = remark,
     warrantyStatus = if (warranty == WarrantyStatus.InWarranty) "IN_WARRANTY" else "OUT_OF_WARRANTY",
+    warrantyRemarks = remark.takeIf { warranty == WarrantyStatus.OutOfWarranty },
 )
+
+/** An item of the detail answer, back into a form item. */
+internal fun ReturnItemDto.toAuditItem(id: Long, fallbackYear: Int): AuditItem {
+    val quarter = mfgType.equals("QTR", ignoreCase = true) || mfgType.equals("QUARTER", ignoreCase = true)
+    val out = warrantyStatus.equals("OUT_OF_WARRANTY", ignoreCase = true)
+    val approvedCount = approved ?: 0
+    return AuditItem(
+        id = id,
+        product = Product(itemCode.orEmpty(), itemName.orEmpty()),
+        qty = qty,
+        approved = approvedCount,
+        rejected = rejected ?: 0,
+        totalApproved = totalApproved ?: approvedCount,
+        mfgType = if (quarter) MfgType.Quarter else MfgType.Month,
+        mfgPeriod = (if (quarter) mfgQuarter else mfgMonth) ?: 1,
+        mfgYear = mfgYear ?: fallbackYear,
+        condition = conditionName.orEmpty(),
+        warranty = if (out) WarrantyStatus.OutOfWarranty else WarrantyStatus.InWarranty,
+        // An out-of-warranty item keeps its special remark in `warranty_remarks`.
+        remark = (if (out) warrantyRemarks?.takeIf { it.isNotBlank() } ?: remarks else remarks).orEmpty(),
+    )
+}
+
+/** The whole detail answer as the form's starting point. */
+internal fun ReturnDetailDto.toAuditEdit(fallbackYear: Int): AuditEdit {
+    val code = dealerCode?.takeIf { it.isNotBlank() } ?: bpCode.orEmpty()
+    return AuditEdit(
+        dliNo = dliNo.orEmpty(),
+        dealer = Dealer(
+            id = code,
+            name = dealerName.orEmpty(),
+            bpCode = bpCode?.takeIf { it.isNotBlank() } ?: code,
+            city = "",
+            zone = zone.orEmpty(),
+            address = address.orEmpty(),
+            salesPerson = salesPerson.orEmpty(),
+        ),
+        address = address.orEmpty(),
+        customerCode = customerCode?.takeIf { it.isNotBlank() } ?: code,
+        salesPerson = salesPerson.orEmpty(),
+        inspectionDate = parseDate(inspectionDate ?: auditDate),
+        totalBox = totalBox,
+        items = items.mapIndexed { index, item -> item.toAuditItem(index + 1L, fallbackYear) },
+        warehouseId = warehouseAddress?.id,
+        notes = notes.orEmpty(),
+    )
+}
 
 /**
  * The warehouse object to send as `WarehouseAddress`: the server's own object when the list gave it,
@@ -156,6 +212,37 @@ class AuditRepositoryImpl @Inject constructor(
         val created = body.unwrapObject()
         val dliNo = (created?.get("dli_no") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
             ?: return AppResult.Failure(AppError.Http(502, "The server did not return a DLI number."))
+        return AppResult.Success(remember(dliNo, draft))
+    }
+
+    /** DLI numbers of the DLIs opened for editing, in case the edit answer does not repeat them. */
+    private val knownDliNo = ConcurrentHashMap<Int, String>()
+
+    override suspend fun getForEdit(returnId: Int): AppResult<AuditEdit> {
+        val body = when (val result = safeCall(io) { api.getReturn(returnId) }) {
+            is AppResult.Success -> result.data
+            is AppResult.Failure -> return result
+        }
+        val detail = body.unwrapObject()
+            ?.let { runCatching { json.decodeFromJsonElement(ReturnDetailDto.serializer(), it) }.getOrNull() }
+            ?: return AppResult.Failure(AppError.Http(502, "The DLI could not be read."))
+        knownDliNo[returnId] = detail.dliNo.orEmpty()
+        return AppResult.Success(detail.toAuditEdit(fallbackYear = LocalDate.now().year))
+    }
+
+    override suspend fun update(returnId: Int, draft: AuditDraft): AppResult<SubmittedAudit> {
+        val body = when (val result = safeCall(io) { api.editReturn(returnId, draft.toCreateParts(json) { UriRequestBody(context, it) }) }) {
+            is AppResult.Success -> result.data
+            is AppResult.Failure -> return result
+        }
+        val dliNo = (body.unwrapObject()?.get("dli_no") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+            ?: knownDliNo[returnId]?.takeIf { it.isNotBlank() }
+            ?: return AppResult.Failure(AppError.Http(502, "The server did not return a DLI number."))
+        return AppResult.Success(remember(dliNo, draft))
+    }
+
+    /** Builds what the confirmation screen shows and keeps it for [getSubmitted]. */
+    private suspend fun remember(dliNo: String, draft: AuditDraft): SubmittedAudit {
         val user = auth.observeUser().first()
         val record = SubmittedAudit(
             dliNo = dliNo,
@@ -172,7 +259,7 @@ class AuditRepositoryImpl @Inject constructor(
             attachments = draft.files,
         )
         submitted[dliNo] = record
-        return AppResult.Success(record)
+        return record
     }
 
     override suspend fun getSubmitted(dliNo: String): AppResult<SubmittedAudit> =

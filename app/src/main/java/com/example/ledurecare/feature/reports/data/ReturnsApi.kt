@@ -31,6 +31,11 @@ interface ReturnsApi {
     @POST("api/returns/create/")
     suspend fun createReturn(@Part parts: List<MultipartBody.Part>): JsonElement
 
+    /** Saves changes to a DLI; the same multipart fields as create. */
+    @Multipart
+    @POST("api/returns/{id}/edit/")
+    suspend fun editReturn(@Path("id") id: Int, @Part parts: List<MultipartBody.Part>): JsonElement
+
     @GET("api/returns/{id}/")
     suspend fun getReturn(@Path("id") id: Int): JsonElement
 }

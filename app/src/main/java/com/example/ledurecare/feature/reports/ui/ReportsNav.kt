@@ -20,7 +20,7 @@ data class DliListDestination(val stage: String? = null, val focusSearch: Boolea
 @Serializable
 data class DliDetailDestination(val id: Int)
 
-fun NavGraphBuilder.reportsGraph(navController: NavHostController) {
+fun NavGraphBuilder.reportsGraph(navController: NavHostController, onEditDli: (returnId: Int) -> Unit) {
     navigation<ReportsGraph>(startDestination = ReportsHomeDestination) {
         composable<ReportsHomeDestination> {
             ReportsRoute(
@@ -32,6 +32,7 @@ fun NavGraphBuilder.reportsGraph(navController: NavHostController) {
             DliListRoute(
                 onBack = { navController.popBackStack() },
                 onOpenDli = { navController.navigate(DliDetailDestination(it)) },
+                onEditDli = onEditDli,
             )
         }
         composable<DliDetailDestination> {

@@ -26,6 +26,15 @@ class GetSubmittedAuditUseCase @Inject constructor(private val repository: Audit
     suspend operator fun invoke(dliNo: String): AppResult<SubmittedAudit> = repository.getSubmitted(dliNo)
 }
 
+class GetAuditForEditUseCase @Inject constructor(private val repository: AuditRepository) {
+    suspend operator fun invoke(returnId: Int): AppResult<AuditEdit> = repository.getForEdit(returnId)
+}
+
+class UpdateAuditUseCase @Inject constructor(private val repository: AuditRepository) {
+    suspend operator fun invoke(returnId: Int, draft: AuditDraft): AppResult<SubmittedAudit> =
+        repository.update(returnId, draft)
+}
+
 /** Submits the audit, then marks the planned visit it came from as done. */
 class SubmitAuditUseCase @Inject constructor(
     private val repository: AuditRepository,

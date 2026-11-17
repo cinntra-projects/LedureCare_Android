@@ -17,6 +17,8 @@ data class ReturnListDto(
     @SerialName("status_changed_at") val statusChangedAt: String? = null,
     @SerialName("created_by_name") val createdByName: String? = null,
     val sla: JsonObject? = null,
+    /** True while the DLI may still be changed by its service engineer. */
+    @SerialName("is_editable") val isEditable: Boolean = false,
 )
 
 @Serializable
@@ -26,6 +28,16 @@ data class ReturnItemDto(
     val qty: Int = 0,
     val approved: Int? = null,
     val rejected: Int? = null,
+    // The rest is what the edit form needs.
+    @SerialName("total_approved") val totalApproved: Int? = null,
+    @SerialName("condition_name") val conditionName: String? = null,
+    @SerialName("mfg_type") val mfgType: String? = null,
+    @SerialName("mfg_month") val mfgMonth: Int? = null,
+    @SerialName("mfg_quarter") val mfgQuarter: Int? = null,
+    @SerialName("mfg_year") val mfgYear: Int? = null,
+    val remarks: String? = null,
+    @SerialName("warranty_status") val warrantyStatus: String? = null,
+    @SerialName("warranty_remarks") val warrantyRemarks: String? = null,
 )
 
 @Serializable
@@ -45,6 +57,12 @@ data class ReturnDetailDto(
     @SerialName("dealer_name") val dealerName: String? = null,
     @SerialName("bp_code") val bpCode: String? = null,
     @SerialName("customer_code") val customerCode: String? = null,
+    @SerialName("dealer_code") val dealerCode: String? = null,
+    val address: String? = null,
+    @SerialName("sales_person") val salesPerson: String? = null,
+    val zone: String? = null,
+    val notes: String? = null,
+    @SerialName("inspection_date") val inspectionDate: String? = null,
     @SerialName("audit_date") val auditDate: String? = null,
     val status: String? = null,
     @SerialName("status_changed_at") val statusChangedAt: String? = null,
@@ -72,5 +90,6 @@ data class TrackerEntryDto(
 
 @Serializable
 data class WarehouseAddressDto(
+    val id: Int? = null,
     val name: String? = null,
 )

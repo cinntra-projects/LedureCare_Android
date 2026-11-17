@@ -29,7 +29,7 @@ class ReturnListPageTest {
             {"id": 41, "dli_no": "19006111226", "dealer_code": "19006", "dealer_name": "Tribeni Constructions Ltd. (Kolkata) (R)",
              "bp_code": "19006", "inspection_date": "2026-11-12", "status": "sap", "status_label": "Moved to SAP",
              "audit_date": "2026-11-12", "is_draft": false, "items_count": 3, "total_qty": 50, "total_box": 20, "days_open": 4,
-             "created_by_name": "Service Engineer",
+             "created_by_name": "Service Engineer", "is_editable": true,
              "tracker": [{"status": "coord", "state": "completed", "at": "2026-11-12T10:45:17.880373Z", "days_in_stage": 0}],
              "sla": {"sla_breached": true, "breach_days": 2},
              "status_changed_at": "2026-11-12T17:41:45.271467+05:30"},
@@ -60,6 +60,7 @@ class ReturnListPageTest {
         assertEquals(4, dli.daysInStage)
         assertTrue(dli.isOverSla) // sla.sla_breached
         assertEquals("Service Engineer", dli.auditedBy)
+        assertTrue(dli.isEditable) // is_editable
     }
 
     @Test

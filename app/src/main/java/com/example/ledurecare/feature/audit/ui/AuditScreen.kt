@@ -124,7 +124,13 @@ fun AuditScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 BackButton(onBack)
                 Column {
-                    Text(stringResource(R.string.audit_title), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Ink)
+                    Text(
+                        stringResource(if (state.isEditing) R.string.audit_edit_title else R.string.audit_title),
+                        fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Ink,
+                    )
+                    if (state.isEditing && state.dliNo.isNotBlank()) {
+                        Text(state.dliNo, fontSize = 11.sp, color = Muted)
+                    }
                     state.startedFrom?.let {
                         Text(stringResource(R.string.audit_started_from, it.shortDate()), fontSize = 11.sp, color = Muted)
                     }
@@ -166,7 +172,7 @@ private fun SubmitBar(state: AuditUiState, onSubmit: () -> Unit) {
                     if (state.isSubmitting) {
                         CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                     } else {
-                        Text(stringResource(R.string.audit_submit), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        Text(stringResource(if (state.isEditing) R.string.audit_save_changes else R.string.audit_submit), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                     }
                 }
             }

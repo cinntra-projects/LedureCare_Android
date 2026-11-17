@@ -36,6 +36,8 @@ data class Dli(
     val auditedBy: String?,
     /** Days from audit to closure; only set for completed DLIs. */
     val turnaroundDays: Int? = null,
+    /** The server says this DLI can still be edited (`is_editable`). */
+    val isEditable: Boolean = false,
 ) {
     fun matches(query: String): Boolean = query.isBlank() ||
         dliNo.contains(query, ignoreCase = true) ||

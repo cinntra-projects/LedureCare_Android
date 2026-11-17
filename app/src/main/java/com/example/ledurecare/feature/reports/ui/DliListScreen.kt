@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.DropdownMenu
@@ -77,10 +78,11 @@ import java.time.LocalDate
 fun DliListRoute(
     onBack: () -> Unit,
     onOpenDli: (Int) -> Unit,
+    onEditDli: (Int) -> Unit,
     viewModel: DliListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    DliListScreen(state, viewModel::onEvent, onBack, onOpenDli)
+    DliListScreen(state, viewModel::onEvent, onBack, onOpenDli, onEditDli)
 }
 
 @Composable
@@ -89,6 +91,7 @@ fun DliListScreen(
     onEvent: (DliListEvent) -> Unit,
     onBack: () -> Unit,
     onOpenDli: (Int) -> Unit,
+    onEditDli: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val searchFocus = remember { FocusRequester() }
@@ -150,7 +153,14 @@ fun DliListScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 12.dp),
                 ) {
-                    items(state.visible, key = { it.id }) { dli -> DliCard(dli) { onOpenDli(dli.id) } }
+                    items(state.visible, key = { it.id }) { dli ->
+                        DliCard(
+                            dli = dli,
+                            onClick = { onOpenDli(dli.id) },
+                            // Edit is for service engineers, on DLIs the server marks editable.
+                            onEdit = if (state.canEdit(dli)) ({ onEditDli(dli.id) }) else null,
+                        )
+                    }
                     if (state.isLoadingMore) {
                         item(key = "loading-more") {
                             Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
@@ -252,7 +262,7 @@ private fun StageChip(stage: ReturnStatus, count: Int, onClear: () -> Unit) {
 }
 
 @Composable
-private fun DliCard(dli: Dli, onClick: () -> Unit) {
+private fun DliCard(dli: Dli, onClick: () -> Unit, onEdit: (() -> Unit)? = null) {
     val alert = dli.isOverSla
     Surface(
         onClick = onClick,
@@ -279,6 +289,23 @@ private fun DliCard(dli: Dli, onClick: () -> Unit) {
                         fontWeight = if (alert) FontWeight.Bold else FontWeight.Normal,
                         color = if (alert) ErrorRed else Muted,
                     )
+                }
+            }
+            if (onEdit != null) {
+                Surface(
+                    onClick = onEdit,
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.White,
+                    border = BorderStroke(1.dp, PlanGreen.copy(alpha = 0.5f)),
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(12.dp), tint = PlanGreen)
+                        Text(stringResource(R.string.dli_edit), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = PlanGreen)
+                    }
                 }
             }
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Muted)

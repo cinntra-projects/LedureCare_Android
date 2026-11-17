@@ -9,6 +9,12 @@ interface AuditRepository {
     /** Creates the DLI from a validated [draft]. */
     suspend fun submit(draft: AuditDraft): AppResult<SubmittedAudit>
 
+    /** The existing DLI [returnId], shaped for the form. */
+    suspend fun getForEdit(returnId: Int): AppResult<AuditEdit>
+
+    /** Saves the changes made to the existing DLI [returnId]. */
+    suspend fun update(returnId: Int, draft: AuditDraft): AppResult<SubmittedAudit>
+
     /** A previously submitted DLI, for the confirmation screen and the document viewer. */
     suspend fun getSubmitted(dliNo: String): AppResult<SubmittedAudit>
 }

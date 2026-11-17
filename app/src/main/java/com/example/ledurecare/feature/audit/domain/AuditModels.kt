@@ -78,6 +78,21 @@ data class AuditDraft(
     val files: List<AuditFile>,
 )
 
+/** A submitted DLI loaded back into the form so its service engineer can change it. */
+data class AuditEdit(
+    val dliNo: String,
+    val dealer: Dealer,
+    val address: String,
+    val customerCode: String,
+    val salesPerson: String,
+    val inspectionDate: LocalDate?,
+    val totalBox: Int?,
+    val items: List<AuditItem>,
+    /** The warehouse chosen when the DLI was created; matched against the warehouse list. */
+    val warehouseId: Int?,
+    val notes: String,
+)
+
 /** The audit-form PDF the backend generates when a DLI is submitted. */
 data class GeneratedFile(val name: String, val sizeBytes: Long, val pages: Int)
 

@@ -140,6 +140,9 @@
     <string name="dealer_picker_subtitle">Pick the dealer for this audit</string>
 
     <string name="audit_title">New DLI Audit</string>
+    <string name="audit_edit_title">Edit DLI Audit</string>
+    <string name="audit_save_changes">Save changes</string>
+    <string name="dli_edit">Edit</string>
     <string name="audit_started_from">Started from My Plan · %1$s</string>
     <string name="audit_dealer_details">Dealer details</string>
     <string name="audit_dealer_hint">Auto-filled from the planned dealer</string>

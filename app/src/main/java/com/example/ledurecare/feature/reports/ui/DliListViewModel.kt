@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ledurecare.core.common.AppError
 import com.example.ledurecare.core.common.AppResult
+import com.example.ledurecare.feature.auth.domain.AuthRepository
 import com.example.ledurecare.feature.reports.domain.Dli
 import com.example.ledurecare.feature.reports.domain.GetDlisUseCase
 import com.example.ledurecare.feature.reports.domain.ReturnStatus
@@ -16,6 +17,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/** `role.code` of a service engineer in the login answer. */
+internal const val SERVICE_ENGINEER_ROLE = "service_engineer"
 
 data class DliListUiState(
     val isLoading: Boolean = true,
@@ -31,7 +35,12 @@ data class DliListUiState(
     val isLoadingMore: Boolean = false,
     /** A later page failed; the rows already shown stay and Retry asks for that page again. */
     val loadMoreError: AppError? = null,
+    /** The signed-in user is a service engineer, the only role that may edit a DLI. */
+    val isServiceEngineer: Boolean = false,
 ) {
+    /** Edit shows only for a service engineer, and only on a DLI the server marks editable. */
+    fun canEdit(dli: Dli): Boolean = isServiceEngineer && dli.isEditable
+
     val isFiltering: Boolean get() = stage != null || query.isNotBlank()
 
     /** The loaded DLIs that match the stage and search text. */
@@ -52,6 +61,7 @@ sealed interface DliListEvent {
 class DliListViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val getDlis: GetDlisUseCase,
+    authRepository: AuthRepository,
 ) : ViewModel() {
 
     // Navigation arguments, stored under their property names (see DliListRoute).
@@ -66,6 +76,12 @@ class DliListViewModel @Inject constructor(
     private var job: Job? = null
 
     init {
+        // The role comes from the login answer (`role.code`), stored with the user.
+        viewModelScope.launch {
+            authRepository.observeUser().collect { user ->
+                _state.update { it.copy(isServiceEngineer = user?.roleCode == SERVICE_ENGINEER_ROLE) }
+            }
+        }
         load()
     }
 

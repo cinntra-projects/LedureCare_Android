@@ -3,6 +3,11 @@ package com.example.ledurecare.feature.reports.ui
 import androidx.lifecycle.SavedStateHandle
 import com.example.ledurecare.core.common.AppError
 import com.example.ledurecare.core.common.AppResult
+import com.example.ledurecare.feature.auth.domain.AuthRepository
+import com.example.ledurecare.feature.auth.domain.User
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.flow.flowOf
 import com.example.ledurecare.feature.reports.domain.Dli
 import com.example.ledurecare.feature.reports.domain.DliDetail
 import com.example.ledurecare.feature.reports.domain.DliPage
@@ -57,7 +62,28 @@ class DliListViewModelTest {
     private fun viewModel(
         repo: FakeRepository = FakeRepository(all),
         args: Map<String, Any?> = emptyMap(),
-    ) = DliListViewModel(SavedStateHandle(args), GetDlisUseCase(repo))
+        user: User? = null,
+    ): DliListViewModel {
+        val auth = mockk<AuthRepository> { every { observeUser() } returns flowOf(user) }
+        return DliListViewModel(SavedStateHandle(args), GetDlisUseCase(repo), auth)
+    }
+
+    private fun engineer(code: String) = User("2", "Service Engineer", "se@ledure.com", roleCode = code)
+
+    @Test
+    fun `only a service engineer sees edit, and only on an editable DLI`() = runTest {
+        val editable = dli(1, "A", ReturnStatus.Coord, 1).copy(isEditable = true)
+        val locked = dli(2, "B", ReturnStatus.Coord, 1)
+        val repo = FakeRepository(listOf(editable, locked))
+
+        val asEngineer = viewModel(repo, user = engineer("service_engineer")).state.value
+        assertTrue(asEngineer.canEdit(editable))
+        assertFalse(asEngineer.canEdit(locked))
+
+        val asAdmin = viewModel(repo, user = engineer("admin")).state.value
+        assertFalse(asAdmin.canEdit(editable))
+        assertFalse(viewModel(repo).state.value.canEdit(editable))
+    }
 
     @Test
     fun `no filter shows everything in the order the server sent it`() = runTest {
