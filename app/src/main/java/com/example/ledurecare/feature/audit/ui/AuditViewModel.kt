@@ -10,7 +10,9 @@ import com.example.ledurecare.feature.audit.domain.AuditField
 import com.example.ledurecare.feature.audit.domain.EntryField
 import com.example.ledurecare.feature.audit.domain.GetAuditForEditUseCase
 import com.example.ledurecare.feature.audit.domain.GetAuditOptionsUseCase
+import com.example.ledurecare.feature.audit.domain.SearchProductsUseCase
 import com.example.ledurecare.feature.audit.domain.UpdateAuditUseCase
+import kotlinx.coroutines.delay
 import com.example.ledurecare.feature.audit.domain.ItemInput
 import com.example.ledurecare.feature.audit.domain.MAX_FILE_BYTES
 import com.example.ledurecare.feature.audit.domain.SubmitAuditUseCase
@@ -36,6 +38,8 @@ import java.time.LocalDate
 import javax.inject.Inject
 
 private const val MAX_DIGITS = 6
+private const val MIN_PRODUCT_QUERY = 2
+private const val PRODUCT_SEARCH_DEBOUNCE_MS = 300L
 
 private fun String.digits() = filter(Char::isDigit).take(MAX_DIGITS)
 
@@ -46,6 +50,7 @@ class AuditViewModel @Inject constructor(
     private val searchDealers: SearchDealersUseCase,
     private val getDealerDetails: GetDealerDetailsUseCase,
     private val getOptions: GetAuditOptionsUseCase,
+    private val searchItems: SearchProductsUseCase,
     private val submitAudit: SubmitAuditUseCase,
     private val getAuditForEdit: GetAuditForEditUseCase,
     private val updateAudit: UpdateAuditUseCase,
@@ -90,11 +95,15 @@ class AuditViewModel @Inject constructor(
             is AuditEvent.InspectionDateChanged -> field(AuditField.InspectionDate) { it.copy(inspectionDate = event.date) }
             is AuditEvent.TotalBoxChanged -> field(AuditField.TotalBox) { it.copy(totalBox = event.value.digits()) }
 
-            is AuditEvent.ProductQueryChanged -> entry(EntryField.Product) {
-                it.copy(productQuery = event.value, product = null)
+            is AuditEvent.ProductQueryChanged -> {
+                entry(EntryField.Product) { it.copy(productQuery = event.value, product = null) }
+                runProductSearch(event.value)
             }
-            is AuditEvent.ProductSelected -> entry(EntryField.Product) {
-                it.copy(productQuery = "${event.product.code} · ${event.product.name}", product = event.product)
+            is AuditEvent.ProductSelected -> {
+                entry(EntryField.Product) {
+                    it.copy(productQuery = "${event.product.code} · ${event.product.name}", product = event.product)
+                }
+                runProductSearch("")
             }
             is AuditEvent.QtyChanged -> entry(EntryField.Qty, EntryField.Approved) { it.copy(qty = event.value.digits()) }
             is AuditEvent.ApprovedChanged -> entry(EntryField.Approved) {
@@ -168,6 +177,29 @@ class AuditViewModel @Inject constructor(
                 )
             }
             fillDealerDetails(dealer)
+        }
+    }
+
+    private var productJob: Job? = null
+
+    /**
+     * Looks the typed text up on the server, among the items this dealer can order. It waits a moment
+     * after the last key, so typing does not send a request per letter, and a newer search replaces an
+     * older one. Without a dealer, or with less than two letters, there is nothing to search.
+     */
+    private fun runProductSearch(text: String) {
+        productJob?.cancel()
+        val dealer = _state.value.dealer
+        val query = text.trim()
+        if (dealer == null || query.length < MIN_PRODUCT_QUERY) {
+            _state.update { it.copy(productResults = emptyList(), isSearchingProducts = false) }
+            return
+        }
+        productJob = viewModelScope.launch {
+            delay(PRODUCT_SEARCH_DEBOUNCE_MS)
+            _state.update { it.copy(isSearchingProducts = true) }
+            val found = (searchItems(dealer.bpCode.ifBlank { dealer.id }, query) as? AppResult.Success)?.data.orEmpty()
+            _state.update { it.copy(productResults = found, isSearchingProducts = false) }
         }
     }
 

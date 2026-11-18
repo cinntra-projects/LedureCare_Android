@@ -81,18 +81,21 @@ fun PeriodHeader(
     modifier: Modifier = Modifier,
 ) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        SquareIconButton(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.plan_previous), onPrevious)
-        Text(
-            title,
-            modifier = Modifier.padding(horizontal = 8.dp),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = Ink,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        SquareIconButton(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.plan_next), onNext)
-        Box(Modifier.weight(1f))
+        // The title takes only the room the view switch leaves, so neither of them ever wraps onto a second line.
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            SquareIconButton(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.plan_previous), onPrevious)
+            Text(
+                title,
+                modifier = Modifier.weight(1f, fill = false).padding(horizontal = 8.dp),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Ink,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+            SquareIconButton(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.plan_next), onNext)
+        }
         ViewSwitch(view, onViewChange)
     }
 }
@@ -136,10 +139,12 @@ private fun ViewSwitch(selected: PlanView, onSelect: (PlanView) -> Unit) {
                             PlanView.Month -> R.string.plan_view_month
                         }
                     ),
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
                     fontSize = 11.sp,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                     color = if (isSelected) Ink else Muted,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
         }

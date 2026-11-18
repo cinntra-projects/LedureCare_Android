@@ -15,7 +15,9 @@ import com.example.ledurecare.feature.audit.domain.UpdateAuditUseCase
 import com.example.ledurecare.feature.audit.domain.MAX_FILE_BYTES
 import com.example.ledurecare.feature.audit.domain.MfgType
 import com.example.ledurecare.feature.audit.domain.Product
+import com.example.ledurecare.feature.audit.domain.SearchProductsUseCase
 import com.example.ledurecare.feature.audit.domain.SubmitAuditUseCase
+import com.example.ledurecare.feature.audit.data.FakeProductRepository
 import com.example.ledurecare.feature.audit.domain.WarrantyStatus
 import com.example.ledurecare.feature.dealers.data.FakeDealerRepository
 import com.example.ledurecare.feature.dealers.data.StaticDealers
@@ -81,6 +83,7 @@ class AuditViewModelTest {
             SearchDealersUseCase(FakeDealerRepository()),
             GetDealerDetailsUseCase(details),
             GetAuditOptionsUseCase(FakeAuditRepository(), warehouses),
+            SearchProductsUseCase(FakeProductRepository()),
             SubmitAuditUseCase(FakeAuditRepository(), MarkVisitDoneUseCase(plan)),
             GetAuditForEditUseCase(FakeAuditRepository()),
             UpdateAuditUseCase(FakeAuditRepository()),
@@ -199,6 +202,7 @@ class AuditViewModelTest {
     fun `product search suggests matches until one is chosen`() = runTest {
         val vm = open().vm
         vm.onEvent(AuditEvent.ProductQueryChanged("ld-3"))
+        advanceUntilIdle() // the search waits a moment after the last key
         assertEquals(listOf("LD-3105"), vm.state.value.suggestions.map { it.code })
         vm.onEvent(AuditEvent.ProductSelected(filter))
         assertTrue(vm.state.value.suggestions.isEmpty())

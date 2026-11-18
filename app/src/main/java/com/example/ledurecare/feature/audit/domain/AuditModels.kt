@@ -5,7 +5,17 @@ import java.time.LocalDate
 
 const val MAX_FILE_BYTES: Long = 10L * 1024 * 1024
 
-data class Product(val code: String, val name: String)
+/** An item a dealer can return. The price and tax fields come from the item search and are sent back with the DLI. */
+data class Product(
+    val code: String,
+    val name: String,
+    val unitPrice: String? = null,
+    val discount: String? = null,
+    val hsn: String? = null,
+    val uom: String? = null,
+    val gst: String? = null,
+    val taxCode: String? = null,
+)
 
 data class Warehouse(
     val id: Int,

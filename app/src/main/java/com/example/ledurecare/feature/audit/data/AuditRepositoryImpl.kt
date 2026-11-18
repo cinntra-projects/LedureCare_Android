@@ -66,6 +66,13 @@ data class CreateItemDto(
     @SerialName("warranty_status") val warrantyStatus: String,
     /** The special remark, sent only when the item is out of warranty. */
     @SerialName("warranty_remarks") val warrantyRemarks: String? = null,
+    // Price and tax details of the item, as the item search gave them.
+    @SerialName("unit_price") val unitPrice: String? = null,
+    @SerialName("item_discount") val itemDiscount: String? = null,
+    @SerialName("hsn_code") val hsnCode: String? = null,
+    val uom: String? = null,
+    @SerialName("tax_code") val taxCode: String? = null,
+    val gst: String? = null,
 )
 
 internal fun AuditItem.toCreateDto() = CreateItemDto(
@@ -84,6 +91,12 @@ internal fun AuditItem.toCreateDto() = CreateItemDto(
     remarks = remark,
     warrantyStatus = if (warranty == WarrantyStatus.InWarranty) "IN_WARRANTY" else "OUT_OF_WARRANTY",
     warrantyRemarks = remark.takeIf { warranty == WarrantyStatus.OutOfWarranty },
+    unitPrice = product.unitPrice,
+    itemDiscount = product.discount,
+    hsnCode = product.hsn,
+    uom = product.uom,
+    taxCode = product.taxCode,
+    gst = product.gst,
 )
 
 /** An item of the detail answer, back into a form item. */
@@ -93,7 +106,16 @@ internal fun ReturnItemDto.toAuditItem(id: Long, fallbackYear: Int): AuditItem {
     val approvedCount = approved ?: 0
     return AuditItem(
         id = id,
-        product = Product(itemCode.orEmpty(), itemName.orEmpty()),
+        product = Product(
+            code = itemCode.orEmpty(),
+            name = itemName.orEmpty(),
+            unitPrice = unitPrice?.takeIf { it.isNotBlank() },
+            discount = itemDiscount?.takeIf { it.isNotBlank() },
+            hsn = hsnCode?.takeIf { it.isNotBlank() },
+            uom = uom?.takeIf { it.isNotBlank() },
+            gst = gst?.takeIf { it.isNotBlank() },
+            taxCode = taxCode?.takeIf { it.isNotBlank() },
+        ),
         qty = qty,
         approved = approvedCount,
         rejected = rejected ?: 0,

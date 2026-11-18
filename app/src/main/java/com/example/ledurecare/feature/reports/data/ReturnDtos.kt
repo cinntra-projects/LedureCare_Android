@@ -38,6 +38,12 @@ data class ReturnItemDto(
     val remarks: String? = null,
     @SerialName("warranty_status") val warrantyStatus: String? = null,
     @SerialName("warranty_remarks") val warrantyRemarks: String? = null,
+    @SerialName("unit_price") val unitPrice: String? = null,
+    @SerialName("item_discount") val itemDiscount: String? = null,
+    @SerialName("hsn_code") val hsnCode: String? = null,
+    val uom: String? = null,
+    @SerialName("tax_code") val taxCode: String? = null,
+    val gst: String? = null,
 )
 
 @Serializable

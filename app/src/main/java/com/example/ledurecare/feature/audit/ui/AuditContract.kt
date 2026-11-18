@@ -51,6 +51,10 @@ data class AuditUiState(
     val inspectionDate: LocalDate,
     val totalBox: String = "",
 
+    /** Result of the last item search (see [suggestions]) and whether another one is running. */
+    val productResults: List<Product> = emptyList(),
+    val isSearchingProducts: Boolean = false,
+
     val options: AuditOptions = AuditOptions(emptyList(), emptyList(), emptyList()),
     val entry: ItemEntry = ItemEntry(),
     val editingId: Long? = null,
@@ -75,16 +79,9 @@ data class AuditUiState(
         get() = items.isNotEmpty() || notes.isNotBlank() || files.isNotEmpty() ||
             totalBox.isNotBlank()
 
-    /** Up to five products matching what is typed, until one is chosen. */
+    /** What the server's item search found for the typed text, until one is chosen. */
     val suggestions: List<Product>
-        get() = if (entry.product != null || entry.productQuery.isBlank()) {
-            emptyList()
-        } else {
-            options.products.filter {
-                it.code.contains(entry.productQuery, ignoreCase = true) ||
-                    it.name.contains(entry.productQuery, ignoreCase = true)
-            }.take(5)
-        }
+        get() = if (entry.product != null || entry.productQuery.isBlank()) emptyList() else productResults
 }
 
 sealed interface AuditEvent {

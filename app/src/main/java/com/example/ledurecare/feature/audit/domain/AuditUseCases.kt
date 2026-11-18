@@ -22,6 +22,11 @@ class GetAuditOptionsUseCase @Inject constructor(
     }
 }
 
+class SearchProductsUseCase @Inject constructor(private val repository: ProductRepository) {
+    suspend operator fun invoke(cardCode: String, text: String): AppResult<List<Product>> =
+        repository.search(cardCode, text)
+}
+
 class GetSubmittedAuditUseCase @Inject constructor(private val repository: AuditRepository) {
     suspend operator fun invoke(dliNo: String): AppResult<SubmittedAudit> = repository.getSubmitted(dliNo)
 }

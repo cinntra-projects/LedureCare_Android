@@ -19,6 +19,11 @@ interface AuditRepository {
     suspend fun getSubmitted(dliNo: String): AppResult<SubmittedAudit>
 }
 
+interface ProductRepository {
+    /** Items the dealer [cardCode] can order whose code or name matches [text]. */
+    suspend fun search(cardCode: String, text: String): AppResult<List<Product>>
+}
+
 interface WarehouseRepository {
     /** Active warehouses a DLI can be sent to. */
     suspend fun getWarehouses(): AppResult<List<Warehouse>>

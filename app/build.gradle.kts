@@ -27,7 +27,8 @@ android {
         buildConfigField("boolean", "USE_STATIC_DEALERS", "false")  // Add dealers sheet, My Dealers, audit dealer list
         buildConfigField("boolean", "USE_STATIC_PLAN", "false")     // My Plan: list, add, edit
         buildConfigField("boolean", "USE_STATIC_WAREHOUSES", "false") // audit form warehouse dropdown
-        buildConfigField("boolean", "USE_STATIC_AUDIT", "false")    // audit form submit (products/conditions stay sample)
+        buildConfigField("boolean", "USE_STATIC_AUDIT", "false")    // audit form submit (conditions stay sample)
+        buildConfigField("boolean", "USE_STATIC_PRODUCTS", "false") // audit form item search
         buildConfigField("boolean", "USE_STATIC_STAGES", "false")   // Reports stage cards
         buildConfigField("boolean", "USE_STATIC_DLIS", "false")     // DLI list and detail
     }
