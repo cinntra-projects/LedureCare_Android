@@ -28,6 +28,9 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.Warehouse
 import androidx.compose.material3.Icon
@@ -306,44 +309,13 @@ private fun ItemEntryPanel(state: AuditUiState, onEvent: (AuditEvent) -> Unit) {
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                LabeledField(stringResource(R.string.audit_qty), Modifier.weight(1f), required = true) {
-                    LedureTextField(
-                        value = entry.qty,
-                        onValueChange = { onEvent(AuditEvent.QtyChanged(it)) },
-                        placeholder = "",
-                        keyboardOptions = NumberKeyboard,
-                        isError = EntryField.Qty in errors,
-                    )
-                }
-                LabeledField(stringResource(R.string.audit_approved), Modifier.weight(1f)) {
-                    LedureTextField(
-                        value = entry.approved,
-                        onValueChange = { onEvent(AuditEvent.ApprovedChanged(it)) },
-                        placeholder = "",
-                        keyboardOptions = NumberKeyboard,
-                        isError = EntryField.Approved in errors,
-                    )
-                }
-                LabeledField(stringResource(R.string.audit_rejected), Modifier.weight(1f)) {
-                    LedureTextField(
-                        value = entry.rejected,
-                        onValueChange = { onEvent(AuditEvent.RejectedChanged(it)) },
-                        placeholder = "",
-                        keyboardOptions = NumberKeyboard,
-                        isError = EntryField.Approved in errors,
-                    )
-                }
-            }
-            if (EntryField.Approved in errors) FormErrorText(stringResource(R.string.audit_error_approved))
-
-            LabeledField(stringResource(R.string.audit_total_approved)) {
+            LabeledField(stringResource(R.string.audit_qty), required = true) {
                 LedureTextField(
-                    value = entry.totalApproved,
-                    onValueChange = { onEvent(AuditEvent.TotalApprovedChanged(it)) },
+                    value = entry.qty,
+                    onValueChange = { onEvent(AuditEvent.QtyChanged(it)) },
                     placeholder = "",
                     keyboardOptions = NumberKeyboard,
-                    isError = EntryField.Approved in errors,
+                    isError = EntryField.Qty in errors,
                 )
             }
 
@@ -417,7 +389,7 @@ private fun ItemEntryPanel(state: AuditUiState, onEvent: (AuditEvent) -> Unit) {
 }
 
 @Composable
-private fun warrantyLabel(status: WarrantyStatus): String = stringResource(
+internal fun warrantyLabel(status: WarrantyStatus): String = stringResource(
     if (status == WarrantyStatus.InWarranty) R.string.audit_warranty_in else R.string.audit_warranty_out
 )
 
@@ -466,7 +438,7 @@ private fun AddedItemCard(
                 if (item.copied) {
                     stringResource(R.string.audit_item_copied, item.qty)
                 } else {
-                    stringResource(R.string.audit_item_qty_line, item.qty, item.approved, item.rejected)
+                    stringResource(R.string.audit_item_qty_only, item.qty)
                 },
                 fontSize = 11.sp,
                 color = Ink,
@@ -595,31 +567,53 @@ fun NotesCard(state: AuditUiState, onEvent: (AuditEvent) -> Unit) {
 }
 
 @Composable
-fun AttachmentsCard(state: AuditUiState, onAdd: () -> Unit, onEvent: (AuditEvent) -> Unit) {
+fun AttachmentsCard(state: AuditUiState, onAdd: () -> Unit, onTakePhoto: () -> Unit, onEvent: (AuditEvent) -> Unit) {
     FormCard(
         title = stringResource(R.string.audit_attachments_title),
         hint = stringResource(R.string.audit_attachments_hint),
     ) {
         val dash = Green500
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(88.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(CopiedBg)
-                .drawBehind {
-                    drawRoundRect(
-                        color = dash,
-                        cornerRadius = CornerRadius(14.dp.toPx()),
-                        style = Stroke(width = 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))),
-                    )
-                }
-                .clickable(onClick = onAdd),
-            verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Icon(Icons.Outlined.FileUpload, contentDescription = null, modifier = Modifier.size(24.dp), tint = PlanGreen)
-            Text(stringResource(R.string.audit_attach_add), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = PlanGreen)
+        var menuOpen by remember { mutableStateOf(false) }
+        Box {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(88.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(CopiedBg)
+                    .drawBehind {
+                        drawRoundRect(
+                            color = dash,
+                            cornerRadius = CornerRadius(14.dp.toPx()),
+                            style = Stroke(width = 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))),
+                        )
+                    }
+                    .clickable { menuOpen = true },
+                verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(Icons.Outlined.FileUpload, contentDescription = null, modifier = Modifier.size(24.dp), tint = PlanGreen)
+                Text(stringResource(R.string.audit_attach_add), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = PlanGreen)
+            }
+            // Two ways to add: pick existing files, or take a photo now.
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.audit_attach_upload)) },
+                    leadingIcon = { Icon(Icons.Outlined.FileUpload, contentDescription = null, tint = PlanGreen) },
+                    onClick = {
+                        menuOpen = false
+                        onAdd()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.audit_attach_camera)) },
+                    leadingIcon = { Icon(Icons.Outlined.PhotoCamera, contentDescription = null, tint = PlanGreen) },
+                    onClick = {
+                        menuOpen = false
+                        onTakePhoto()
+                    },
+                )
+            }
         }
         state.files.forEach { file -> FileRow(file) { onEvent(AuditEvent.RemoveFile(file.uri)) } }
     }

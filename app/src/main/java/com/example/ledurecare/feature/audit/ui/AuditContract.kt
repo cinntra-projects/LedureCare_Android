@@ -19,11 +19,6 @@ data class ItemEntry(
     val productQuery: String = "",
     val product: Product? = null,
     val qty: String = "1",
-    val approved: String = "0",
-    val rejected: String = "0",
-    val totalApproved: String = "0",
-    /** Once the engineer types a final qty it stops following the approved count. */
-    val totalApprovedEdited: Boolean = false,
     val mfgType: MfgType? = null,
     val mfgPeriod: Int? = null,
     val mfgYear: Int? = null,
@@ -40,6 +35,8 @@ data class AuditUiState(
     val startedFrom: LocalDate? = null,
     /** An existing DLI is being edited; [dliNo] is its number. */
     val isEditing: Boolean = false,
+    /** The preview page is showing instead of the form. */
+    val showPreview: Boolean = false,
     val dliNo: String = "",
 
     /** The dealer picker's search: its query, pages loaded so far, and loading state. */
@@ -71,8 +68,8 @@ data class AuditUiState(
 ) {
     val zone: String get() = dealer?.zone.orEmpty()
 
-    /** Read-only: the sum of "total approved" over the added items. */
-    val totalQty: Int get() = items.sumOf { it.totalApproved }
+    /** Read-only: the sum of the quantities of the added items. */
+    val totalQty: Int get() = items.sumOf { it.qty }
 
     /** True once there is something worth confirming before the engineer leaves. */
     val isDirty: Boolean
@@ -103,9 +100,6 @@ sealed interface AuditEvent {
     data class ProductQueryChanged(val value: String) : AuditEvent
     data class ProductSelected(val product: Product) : AuditEvent
     data class QtyChanged(val value: String) : AuditEvent
-    data class ApprovedChanged(val value: String) : AuditEvent
-    data class RejectedChanged(val value: String) : AuditEvent
-    data class TotalApprovedChanged(val value: String) : AuditEvent
     data class MfgTypeChanged(val type: MfgType) : AuditEvent
     data class MfgPeriodChanged(val period: Int) : AuditEvent
     data class MfgYearChanged(val year: Int) : AuditEvent
@@ -128,6 +122,9 @@ sealed interface AuditEvent {
     data class NotesChanged(val value: String) : AuditEvent
     data class FilesPicked(val files: List<AuditFile>) : AuditEvent
     data class RemoveFile(val uri: String) : AuditEvent
+    /** Check the form and show the preview page; nothing is sent yet. */
+    data object OpenPreview : AuditEvent
+    data object ClosePreview : AuditEvent
     data object Submit : AuditEvent
 }
 

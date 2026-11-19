@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.flowOf
 import com.example.ledurecare.feature.reports.domain.Dli
 import com.example.ledurecare.feature.reports.domain.DliDetail
 import com.example.ledurecare.feature.reports.domain.DliPage
+import com.example.ledurecare.feature.reports.domain.DliFilter
+import com.example.ledurecare.feature.reports.domain.ReturnView
+import java.time.LocalDate
 import com.example.ledurecare.feature.reports.domain.DliRepository
 import com.example.ledurecare.feature.reports.domain.GetDlisUseCase
 import com.example.ledurecare.feature.reports.domain.ReturnStatus
@@ -43,8 +46,10 @@ class DliListViewModelTest {
     /** Pages [dlis] like the server does, [pageSize] at a time, and can fail on demand. */
     private class FakeRepository(var dlis: List<Dli>, var failure: AppError? = null, val pageSize: Int = 100) : DliRepository {
         val pages = mutableListOf<Int>()
-        override suspend fun getDliPage(page: Int, pageSize: Int): AppResult<DliPage> {
+        val filters = mutableListOf<DliFilter>()
+        override suspend fun getDliPage(page: Int, pageSize: Int, filter: DliFilter): AppResult<DliPage> {
             pages += page
+            filters += filter
             failure?.let { return AppResult.Failure(it) }
             val size = this.pageSize
             val totalPages = ((dlis.size + size - 1) / size).coerceAtLeast(1)
@@ -69,6 +74,28 @@ class DliListViewModelTest {
     }
 
     private fun engineer(code: String) = User("2", "Service Engineer", "se@ledure.com", roleCode = code)
+
+    @Test
+    fun `a view or date range restarts the list from page one with that filter`() = runTest {
+        val repo = FakeRepository(all)
+        val vm = viewModel(repo)
+        assertEquals(DliFilter(), repo.filters.last())
+
+        vm.onEvent(DliListEvent.ViewSelected(ReturnView.New))
+        assertEquals(ReturnView.New, repo.filters.last().view)
+        assertEquals(1, repo.pages.last())
+
+        val from = LocalDate.of(2026, 11, 1)
+        val to = LocalDate.of(2026, 11, 15)
+        vm.onEvent(DliListEvent.DateRangeSelected(from, to))
+        assertEquals(DliFilter(ReturnView.New, from, to), repo.filters.last())
+
+        vm.onEvent(DliListEvent.ViewSelected(ReturnView.New)) // the active choice again clears it
+        assertEquals(DliFilter(ReturnView.All, from, to), repo.filters.last())
+
+        vm.onEvent(DliListEvent.DateRangeCleared)
+        assertEquals(DliFilter(), repo.filters.last())
+    }
 
     @Test
     fun `only a service engineer sees edit, and only on an editable DLI`() = runTest {

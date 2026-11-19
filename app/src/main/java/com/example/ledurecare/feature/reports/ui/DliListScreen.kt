@@ -25,7 +25,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDateRangePickerState
+import com.example.ledurecare.feature.reports.domain.ReturnView
+import java.time.Instant
+import java.time.ZoneOffset
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.DropdownMenu
@@ -103,11 +114,50 @@ fun DliListScreen(
         modifier = modifier.fillMaxSize().background(PageBg).padding(horizontal = 12.dp).padding(top = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        var pickingDates by remember { mutableStateOf(false) }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             BackButton(onBack)
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.dli_list_title), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Ink)
                 Text(stringResource(R.string.dli_list_subtitle), fontSize = 12.sp, color = Muted)
+            }
+            IconButton(onClick = { pickingDates = true }) {
+                Icon(
+                    Icons.Outlined.CalendarMonth,
+                    contentDescription = stringResource(R.string.dli_pick_dates),
+                    tint = if (state.filter.hasDates) PlanGreen else Ink,
+                )
+            }
+            ReturnViewMenu(state.filter.view) { onEvent(DliListEvent.ViewSelected(it)) }
+        }
+        if (pickingDates) {
+            DateRangeDialog(
+                from = state.filter.from,
+                to = state.filter.to,
+                onApply = { from, to ->
+                    pickingDates = false
+                    onEvent(DliListEvent.DateRangeSelected(from, to))
+                },
+                onClear = {
+                    pickingDates = false
+                    onEvent(DliListEvent.DateRangeCleared)
+                },
+                onDismiss = { pickingDates = false },
+            )
+        }
+        if (state.filter.isActive) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (state.filter.view != ReturnView.All) {
+                    FilterChip(
+                        stringResource(if (state.filter.view == ReturnView.New) R.string.dli_new_returns else R.string.dli_old_returns),
+                    ) { onEvent(DliListEvent.ViewSelected(state.filter.view)) }
+                }
+                state.filter.from?.let { from ->
+                    val to = state.filter.to ?: from
+                    FilterChip(if (to == from) from.shortDate() else "${from.shortDate()} - ${to.shortDate()}") {
+                        onEvent(DliListEvent.DateRangeCleared)
+                    }
+                }
             }
         }
 
@@ -225,6 +275,84 @@ private fun StageFilterButton(selected: ReturnStatus?, onSelect: (ReturnStatus?)
                 )
             }
         }
+    }
+}
+
+/** The three dots: new returns or old returns. The active one is bold; choosing it again clears it. */
+@Composable
+private fun ReturnViewMenu(selected: ReturnView, onSelect: (ReturnView) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.dli_more), tint = Ink)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            listOf(ReturnView.New to R.string.dli_new_returns, ReturnView.Old to R.string.dli_old_returns).forEach { (view, label) ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(label), fontWeight = if (view == selected) FontWeight.Bold else FontWeight.Normal) },
+                    onClick = {
+                        open = false
+                        onSelect(view)
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** A removable chip for an active server filter. */
+@Composable
+private fun FilterChip(text: String, onClear: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(PlanGreen)
+            .clickable(onClick = onClear)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.dli_clear_filter), modifier = Modifier.size(12.dp), tint = Color.White)
+    }
+}
+
+/** Pick the first and last audit date; one tap twice on the same day is a single day. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DateRangeDialog(
+    from: LocalDate?,
+    to: LocalDate?,
+    onApply: (LocalDate, LocalDate) -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    fun LocalDate.millis() = atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    fun Long.date() = Instant.ofEpochMilli(this).atZone(ZoneOffset.UTC).toLocalDate()
+    val pickerState = rememberDateRangePickerState(
+        initialSelectedStartDateMillis = from?.millis(),
+        initialSelectedEndDateMillis = (to ?: from)?.millis(),
+    )
+    val start = pickerState.selectedStartDateMillis
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                enabled = start != null,
+                onClick = {
+                    val first = start!!.date()
+                    onApply(first, pickerState.selectedEndDateMillis?.date() ?: first)
+                },
+            ) { Text(stringResource(R.string.dli_apply)) }
+        },
+        dismissButton = {
+            Row {
+                if (from != null) TextButton(onClick = onClear) { Text(stringResource(R.string.dli_clear_dates)) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.dli_cancel)) }
+            }
+        },
+    ) {
+        DateRangePicker(state = pickerState, modifier = Modifier.weight(1f, fill = false))
     }
 }
 

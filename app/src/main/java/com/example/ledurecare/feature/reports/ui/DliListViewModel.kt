@@ -7,6 +7,9 @@ import com.example.ledurecare.core.common.AppError
 import com.example.ledurecare.core.common.AppResult
 import com.example.ledurecare.feature.auth.domain.AuthRepository
 import com.example.ledurecare.feature.reports.domain.Dli
+import com.example.ledurecare.feature.reports.domain.DliFilter
+import com.example.ledurecare.feature.reports.domain.ReturnView
+import java.time.LocalDate
 import com.example.ledurecare.feature.reports.domain.GetDlisUseCase
 import com.example.ledurecare.feature.reports.domain.ReturnStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -37,6 +40,8 @@ data class DliListUiState(
     val loadMoreError: AppError? = null,
     /** The signed-in user is a service engineer, the only role that may edit a DLI. */
     val isServiceEngineer: Boolean = false,
+    /** What the server is asked for: new or old returns, and an audit-date range. */
+    val filter: DliFilter = DliFilter(),
 ) {
     /** Edit shows only for a service engineer, and only on a DLI the server marks editable. */
     fun canEdit(dli: Dli): Boolean = isServiceEngineer && dli.isEditable
@@ -53,6 +58,10 @@ data class DliListUiState(
 sealed interface DliListEvent {
     data class QueryChanged(val query: String) : DliListEvent
     data class StageSelected(val stage: ReturnStatus?) : DliListEvent
+    /** Menu choice; choosing the active one again clears it. */
+    data class ViewSelected(val view: ReturnView) : DliListEvent
+    data class DateRangeSelected(val from: LocalDate, val to: LocalDate) : DliListEvent
+    data object DateRangeCleared : DliListEvent
     data object LoadMore : DliListEvent
     data object Retry : DliListEvent
 }
@@ -95,16 +104,27 @@ class DliListViewModel @Inject constructor(
                 _state.update { it.copy(stage = event.stage) }
                 fillForFilter()
             }
+            is DliListEvent.ViewSelected -> changeFilter {
+                it.copy(view = if (it.view == event.view) ReturnView.All else event.view)
+            }
+            is DliListEvent.DateRangeSelected -> changeFilter { it.copy(from = event.from, to = event.to) }
+            DliListEvent.DateRangeCleared -> changeFilter { it.copy(from = null, to = null) }
             DliListEvent.LoadMore -> loadMore()
             DliListEvent.Retry -> if (_state.value.all.isEmpty()) load() else loadMore(retry = true)
         }
+    }
+
+    /** A new server filter starts the list over from page 1. */
+    private fun changeFilter(change: (DliFilter) -> DliFilter) {
+        _state.update { it.copy(filter = change(it.filter), all = emptyList(), page = 0, hasMore = false, isLoadingMore = false) }
+        load()
     }
 
     private fun load() {
         job?.cancel()
         _state.update { it.copy(isLoading = true, error = null, loadMoreError = null) }
         job = viewModelScope.launch {
-            when (val result = getDlis(page = 1)) {
+            when (val result = getDlis(page = 1, filter = _state.value.filter)) {
                 is AppResult.Success -> {
                     _state.update {
                         it.copy(
@@ -128,7 +148,7 @@ class DliListViewModel @Inject constructor(
         if (s.loadMoreError != null && !retry) return // wait for Retry, so a failing page is not hammered
         _state.update { it.copy(isLoadingMore = true, loadMoreError = null) }
         job = viewModelScope.launch {
-            when (val result = getDlis(page = s.page + 1)) {
+            when (val result = getDlis(page = s.page + 1, filter = s.filter)) {
                 is AppResult.Success -> {
                     _state.update {
                         it.copy(

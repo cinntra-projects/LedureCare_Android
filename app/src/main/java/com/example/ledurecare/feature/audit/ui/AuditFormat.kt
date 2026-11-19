@@ -27,6 +27,13 @@ fun formatFileSize(bytes: Long): String =
 
 fun AuditFile.isPdf(): Boolean = mimeType.contains("pdf", ignoreCase = true) || name.endsWith(".pdf", ignoreCase = true)
 
+/** An empty file in the app's cache for the camera to write a photo into, as a content address. */
+fun Context.newPhotoUri(): Uri {
+    val dir = java.io.File(cacheDir, "photos").apply { mkdirs() }
+    val file = java.io.File(dir, "photo_${System.currentTimeMillis()}.jpg")
+    return androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+}
+
 /** Reads the display name and size of a picked document. */
 fun Context.toAuditFile(uri: Uri): AuditFile {
     var name: String? = null

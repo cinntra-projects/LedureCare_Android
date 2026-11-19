@@ -12,6 +12,7 @@ import com.example.ledurecare.feature.reports.domain.DliRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.serialization.json.Json
 import com.example.ledurecare.feature.reports.domain.DliPage
+import com.example.ledurecare.feature.reports.domain.DliFilter
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
 import java.util.concurrent.ConcurrentHashMap
@@ -29,9 +30,16 @@ class DliRepositoryImpl @Inject constructor(
     /** Who audited each DLI seen in the list, because the detail answer does not say. */
     private val auditedBy = ConcurrentHashMap<Int, String>()
 
-    override suspend fun getDliPage(page: Int, pageSize: Int): AppResult<DliPage> = safeCall(io) {
+    override suspend fun getDliPage(page: Int, pageSize: Int, filter: DliFilter): AppResult<DliPage> = safeCall(io) {
         val today = LocalDate.now(clock)
-        val body = api.getReturns(view = "all", page = page, pageSize = pageSize)
+        val body = api.getReturns(
+            view = "all",
+            page = page,
+            pageSize = pageSize,
+            dateFrom = filter.from?.toString(),
+            dateTo = (filter.to ?: filter.from)?.toString(),
+            sort = filter.view.sort,
+        )
         val items = body.findArray().mapNotNull {
             runCatching { json.decodeFromJsonElement(ReturnListDto.serializer(), it) }.getOrNull()?.toDomain(today)
         }

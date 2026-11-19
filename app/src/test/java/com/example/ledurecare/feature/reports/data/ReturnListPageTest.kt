@@ -2,7 +2,9 @@ package com.example.ledurecare.feature.reports.data
 
 import com.example.ledurecare.core.common.AppResult
 import com.example.ledurecare.core.network.NetworkModule
+import com.example.ledurecare.feature.reports.domain.DliFilter
 import com.example.ledurecare.feature.reports.domain.ReturnStatus
+import com.example.ledurecare.feature.reports.domain.ReturnView
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -71,6 +73,25 @@ class ReturnListPageTest {
         repo(api).getDliPage(page = 3, pageSize = 10)
 
         coVerify { api.getReturns(view = "all", page = 3, pageSize = 10) }
+    }
+
+    @Test
+    fun `the date range and old-returns sort are sent as the server expects`() = runTest {
+        val api = mockk<ReturnsApi>()
+        coEvery { api.getReturns(any(), any(), any(), any(), any(), any()) } returns json.parseToJsonElement(live)
+
+        repo(api).getDliPage(
+            page = 1,
+            pageSize = 10,
+            filter = DliFilter(ReturnView.Old, LocalDate.of(2026, 8, 19), LocalDate.of(2026, 8, 28)),
+        )
+
+        coVerify {
+            api.getReturns(
+                view = "all", page = 1, pageSize = 10,
+                dateFrom = "2026-08-19", dateTo = "2026-08-28", sort = "oldest_update",
+            )
+        }
     }
 
     @Test

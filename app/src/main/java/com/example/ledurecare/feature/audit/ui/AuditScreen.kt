@@ -1,6 +1,8 @@
 package com.example.ledurecare.feature.audit.ui
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -77,7 +79,22 @@ fun AuditRoute(
         if (uris.isNotEmpty()) viewModel.onEvent(AuditEvent.FilesPicked(uris.map(context::toAuditFile)))
     }
 
-    val leave = { if (state.isDirty) confirmExit = true else onClose() }
+    // The photo the camera is about to take, kept across a rotation while the camera app is open.
+    var pendingPhoto by rememberSaveable { mutableStateOf<Uri?>(null) }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+        val uri = pendingPhoto
+        if (taken && uri != null) viewModel.onEvent(AuditEvent.FilesPicked(listOf(context.toAuditFile(uri))))
+        pendingPhoto = null
+    }
+
+    // From the preview page, Back returns to the form instead of leaving it.
+    val leave = {
+        when {
+            state.showPreview -> viewModel.onEvent(AuditEvent.ClosePreview)
+            state.isDirty -> confirmExit = true
+            else -> onClose()
+        }
+    }
     BackHandler(onBack = leave)
 
     AuditScreen(
@@ -85,6 +102,14 @@ fun AuditRoute(
         onEvent = viewModel::onEvent,
         onBack = leave,
         onAddFiles = { filePicker.launch(arrayOf("image/*", "application/pdf")) },
+        onTakePhoto = {
+            val uri = context.newPhotoUri()
+            pendingPhoto = uri
+            runCatching { camera.launch(uri) }.onFailure {
+                pendingPhoto = null
+                Toast.makeText(context, R.string.audit_no_camera, Toast.LENGTH_SHORT).show()
+            }
+        },
     )
 
     if (confirmExit) {
@@ -111,6 +136,7 @@ fun AuditScreen(
     onEvent: (AuditEvent) -> Unit,
     onBack: () -> Unit,
     onAddFiles: () -> Unit,
+    onTakePhoto: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize().background(PageBg)) {
@@ -125,9 +151,16 @@ fun AuditScreen(
                 BackButton(onBack)
                 Column {
                     Text(
-                        stringResource(if (state.isEditing) R.string.audit_edit_title else R.string.audit_title),
+                        stringResource(
+                            when {
+                                state.showPreview -> R.string.audit_preview_title
+                                state.isEditing -> R.string.audit_edit_title
+                                else -> R.string.audit_title
+                            }
+                        ),
                         fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Ink,
                     )
+                    if (state.showPreview) Text(stringResource(R.string.audit_preview_hint), fontSize = 11.sp, color = Muted)
                     if (state.isEditing && state.dliNo.isNotBlank()) {
                         Text(state.dliNo, fontSize = 11.sp, color = Muted)
                     }
@@ -140,29 +173,37 @@ fun AuditScreen(
             when {
                 state.isLoading -> LoadingBox()
                 state.error != null -> ErrorBox(state.error, { onEvent(AuditEvent.Retry) })
+                state.showPreview -> AuditPreviewContent(state)
                 else -> {
                     DealerDetailsCard(state, onEvent)
                     AuditedItemsCard(state, onEvent)
                     WarehouseCard(state, onEvent)
                     NotesCard(state, onEvent)
-                    AttachmentsCard(state, onAddFiles, onEvent)
+                    AttachmentsCard(state, onAddFiles, onTakePhoto, onEvent)
                 }
             }
         }
 
         if (!state.isLoading && state.error == null) {
-            SubmitBar(state) { onEvent(AuditEvent.Submit) }
+            // The form's button opens the preview; only the preview's button sends the audit.
+            if (state.showPreview) {
+                SubmitBar(state, if (state.isEditing) R.string.audit_save_changes else R.string.audit_submit) { onEvent(AuditEvent.Submit) }
+            } else {
+                SubmitBar(state, if (state.isEditing) R.string.audit_preview_changes else R.string.audit_preview_button) {
+                    onEvent(AuditEvent.OpenPreview)
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun SubmitBar(state: AuditUiState, onSubmit: () -> Unit) {
+private fun SubmitBar(state: AuditUiState, label: Int, onClick: () -> Unit) {
     Surface(color = Color.White, shadowElevation = 8.dp) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             state.submitError?.let { Text(it.asMessage(), fontSize = 12.sp, color = ErrorRed) }
             Surface(
-                onClick = onSubmit,
+                onClick = onClick,
                 enabled = !state.isSubmitting,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(12.dp),
@@ -172,7 +213,7 @@ private fun SubmitBar(state: AuditUiState, onSubmit: () -> Unit) {
                     if (state.isSubmitting) {
                         CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                     } else {
-                        Text(stringResource(if (state.isEditing) R.string.audit_save_changes else R.string.audit_submit), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        Text(stringResource(label), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                     }
                 }
             }

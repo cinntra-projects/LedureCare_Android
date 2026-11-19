@@ -93,11 +93,9 @@ class AuditViewModelTest {
         return Harness(vm, plan, visit.id)
     }
 
-    private fun AuditViewModel.fillItem(qty: String = "12", approved: String = "10", rejected: String = "2") {
+    private fun AuditViewModel.fillItem(qty: String = "12") {
         onEvent(AuditEvent.ProductSelected(filter))
         onEvent(AuditEvent.QtyChanged(qty))
-        onEvent(AuditEvent.ApprovedChanged(approved))
-        onEvent(AuditEvent.RejectedChanged(rejected))
         onEvent(AuditEvent.MfgTypeChanged(MfgType.Quarter))
         onEvent(AuditEvent.MfgPeriodChanged(2))
         onEvent(AuditEvent.MfgYearChanged(2025))
@@ -158,13 +156,34 @@ class AuditViewModelTest {
     }
 
     @Test
-    fun `final qty follows approved until it is edited`() = runTest {
+    fun `an item counts as fully approved, since the form has no approved fields`() = runTest {
         val vm = open().vm
-        vm.onEvent(AuditEvent.ApprovedChanged("7"))
-        assertEquals("7", vm.state.value.entry.totalApproved)
-        vm.onEvent(AuditEvent.TotalApprovedChanged("5"))
-        vm.onEvent(AuditEvent.ApprovedChanged("8"))
-        assertEquals("5", vm.state.value.entry.totalApproved)
+        vm.fillItem(qty = "7")
+        vm.onEvent(AuditEvent.AddItem)
+        val item = vm.state.value.items.single()
+        assertEquals(7, item.approved)
+        assertEquals(0, item.rejected)
+        assertEquals(7, item.totalApproved)
+    }
+
+    @Test
+    fun `the preview opens only for a valid form, and sends nothing`() = runTest {
+        val h = open()
+        h.vm.onEvent(AuditEvent.OpenPreview)
+        assertFalse(h.vm.state.value.showPreview)
+        assertTrue(h.vm.state.value.errors.isNotEmpty())
+
+        h.vm.onEvent(AuditEvent.TotalBoxChanged("3"))
+        h.vm.fillItem()
+        h.vm.onEvent(AuditEvent.AddItem)
+        h.vm.onEvent(AuditEvent.WarehouseSelected(1))
+        h.vm.onEvent(AuditEvent.OpenPreview)
+        advanceUntilIdle()
+
+        assertTrue(h.vm.state.value.showPreview)
+        assertEquals(VisitStatus.Planned, h.plan.getVisit(h.visitId)!!.status) // not submitted yet
+        h.vm.onEvent(AuditEvent.ClosePreview)
+        assertFalse(h.vm.state.value.showPreview)
     }
 
     @Test
@@ -174,17 +193,6 @@ class AuditViewModelTest {
         vm.onEvent(AuditEvent.TotalBoxChanged("3x"))
         assertEquals("12", vm.state.value.entry.qty)
         assertEquals("3", vm.state.value.totalBox)
-    }
-
-    @Test
-    fun `approved plus rejected over qty is rejected`() = runTest {
-        val vm = open().vm
-        vm.fillItem(qty = "5", approved = "4", rejected = "3")
-        vm.onEvent(AuditEvent.AddItem)
-        assertTrue(vm.state.value.items.isEmpty())
-        assertEquals(setOf(EntryField.Approved), vm.state.value.entryErrors)
-        vm.onEvent(AuditEvent.RejectedChanged("1"))
-        assertTrue(EntryField.Approved !in vm.state.value.entryErrors)
     }
 
     @Test
@@ -222,7 +230,7 @@ class AuditViewModelTest {
         assertEquals(original.id, items[0].id)
         with(items[1]) {
             assertEquals(1, qty)
-            assertEquals(0, approved)
+            assertEquals(1, approved)
             assertEquals(0, rejected)
             assertTrue(copied)
             assertEquals(original.product, product)
@@ -297,16 +305,16 @@ class AuditViewModelTest {
     }
 
     @Test
-    fun `total quantity is the sum of total approved of the added items`() = runTest {
+    fun `total quantity is the sum of the quantities of the added items`() = runTest {
         val vm = open().vm
         assertEquals(0, vm.state.value.totalQty)
-        vm.fillItem(qty = "12", approved = "10", rejected = "2")
+        vm.fillItem(qty = "12")
         vm.onEvent(AuditEvent.AddItem)
-        vm.fillItem(qty = "8", approved = "5", rejected = "3")
+        vm.fillItem(qty = "8")
         vm.onEvent(AuditEvent.AddItem)
-        assertEquals(15, vm.state.value.totalQty)
+        assertEquals(20, vm.state.value.totalQty)
         vm.onEvent(AuditEvent.DeleteItem(vm.state.value.items.first().id))
-        assertEquals(5, vm.state.value.totalQty)
+        assertEquals(8, vm.state.value.totalQty)
     }
 
     @Test

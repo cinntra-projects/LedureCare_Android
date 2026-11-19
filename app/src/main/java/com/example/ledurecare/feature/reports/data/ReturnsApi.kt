@@ -21,6 +21,9 @@ interface ReturnsApi {
         @Query("view") view: String = "all",
         @Query("page") page: Int? = null,
         @Query("page_size") pageSize: Int? = null,
+        @Query("date_from") dateFrom: String? = null,
+        @Query("date_to") dateTo: String? = null,
+        @Query("sort") sort: String? = null,
     ): JsonElement
 
     /**

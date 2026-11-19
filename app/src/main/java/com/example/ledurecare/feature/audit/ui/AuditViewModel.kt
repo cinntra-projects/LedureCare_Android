@@ -106,17 +106,6 @@ class AuditViewModel @Inject constructor(
                 runProductSearch("")
             }
             is AuditEvent.QtyChanged -> entry(EntryField.Qty, EntryField.Approved) { it.copy(qty = event.value.digits()) }
-            is AuditEvent.ApprovedChanged -> entry(EntryField.Approved) {
-                val approved = event.value.digits()
-                it.copy(
-                    approved = approved,
-                    totalApproved = if (it.totalApprovedEdited) it.totalApproved else approved.ifEmpty { "0" },
-                )
-            }
-            is AuditEvent.RejectedChanged -> entry(EntryField.Approved) { it.copy(rejected = event.value.digits()) }
-            is AuditEvent.TotalApprovedChanged -> entry(EntryField.Approved) {
-                it.copy(totalApproved = event.value.digits(), totalApprovedEdited = true)
-            }
             is AuditEvent.MfgTypeChanged -> entry(EntryField.MfgType, EntryField.MfgPeriod) {
                 // Month and quarter numbers mean different things, so a new type clears the old pick.
                 if (it.mfgType == event.type) it else it.copy(mfgType = event.type, mfgPeriod = null)
@@ -143,6 +132,8 @@ class AuditViewModel @Inject constructor(
             is AuditEvent.NotesChanged -> _state.update { it.copy(notes = event.value) }
             is AuditEvent.FilesPicked -> addFiles(event.files)
             is AuditEvent.RemoveFile -> _state.update { s -> s.copy(files = s.files.filterNot { it.uri == event.uri }) }
+            AuditEvent.OpenPreview -> openPreview()
+            AuditEvent.ClosePreview -> _state.update { it.copy(showPreview = false, submitError = null) }
             AuditEvent.Submit -> submit()
         }
     }
@@ -226,7 +217,8 @@ class AuditViewModel @Inject constructor(
                 salesPerson = dli.salesPerson,
                 inspectionDate = dli.inspectionDate ?: it.inspectionDate,
                 totalBox = dli.totalBox?.toString().orEmpty(),
-                items = dli.items,
+                // The form no longer has approved / rejected fields: every item counts as fully approved.
+                items = dli.items.map { item -> item.copy(approved = item.qty, rejected = 0, totalApproved = item.qty) },
                 warehouse = options.data.warehouses.firstOrNull { w -> w.id == dli.warehouseId }
                     ?: options.data.warehouses.singleOrNull(),
                 notes = dli.notes,
@@ -280,9 +272,10 @@ class AuditViewModel @Inject constructor(
     private fun ItemEntry.toInput() = ItemInput(
         product = product,
         qty = qty.toIntOrNull(),
-        approved = approved.toIntOrNull(),
-        rejected = rejected.toIntOrNull(),
-        totalApproved = totalApproved.toIntOrNull(),
+        // The form no longer asks for these: every item counts as fully approved.
+        approved = qty.toIntOrNull(),
+        rejected = 0,
+        totalApproved = qty.toIntOrNull(),
         mfgType = mfgType,
         mfgPeriod = mfgPeriod,
         mfgYear = mfgYear,
@@ -319,9 +312,9 @@ class AuditViewModel @Inject constructor(
         val copy = s.items[index].copy(
             id = nextItemId++,
             qty = 1,
-            approved = 0,
+            approved = 1,
             rejected = 0,
-            totalApproved = 0,
+            totalApproved = 1,
             copied = true,
         )
         s.copy(items = s.items.toMutableList().apply { add(index + 1, copy) })
@@ -336,10 +329,6 @@ class AuditViewModel @Inject constructor(
                 productQuery = "${item.product.code} · ${item.product.name}",
                 product = item.product,
                 qty = item.qty.toString(),
-                approved = item.approved.toString(),
-                rejected = item.rejected.toString(),
-                totalApproved = item.totalApproved.toString(),
-                totalApprovedEdited = true,
                 mfgType = item.mfgType,
                 mfgPeriod = item.mfgPeriod,
                 mfgYear = item.mfgYear,
@@ -383,6 +372,17 @@ class AuditViewModel @Inject constructor(
         notes = s.notes.trim(),
         files = s.files,
     )
+
+    /** Same checks as a submit; when the form is fine, the preview page opens instead of anything being sent. */
+    private fun openPreview() {
+        val problems = validateAudit(draft(_state.value))
+        if (problems.isNotEmpty()) {
+            _state.update { it.copy(errors = problems) }
+            viewModelScope.launch { _effects.send(AuditEffect.FixErrors) }
+            return
+        }
+        _state.update { it.copy(errors = emptySet(), showPreview = true, submitError = null) }
+    }
 
     private fun submit() {
         val s = _state.value

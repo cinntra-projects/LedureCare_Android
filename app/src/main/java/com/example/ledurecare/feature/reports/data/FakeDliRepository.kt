@@ -7,6 +7,7 @@ import com.example.ledurecare.feature.reports.domain.AttachmentKind
 import com.example.ledurecare.feature.reports.domain.Dli
 import com.example.ledurecare.feature.reports.domain.DliDetail
 import com.example.ledurecare.feature.reports.domain.DliPage
+import com.example.ledurecare.feature.reports.domain.DliFilter
 import com.example.ledurecare.feature.reports.domain.DliItem
 import com.example.ledurecare.feature.reports.domain.DliRepository
 import com.example.ledurecare.feature.reports.domain.ReturnStatus
@@ -27,9 +28,12 @@ class FakeDliRepository @Inject constructor() : DliRepository {
         return AppResult.Success(StaticDlis.all.map { it.toDli() })
     }
 
-    override suspend fun getDliPage(page: Int, pageSize: Int): AppResult<DliPage> {
+    override suspend fun getDliPage(page: Int, pageSize: Int, filter: DliFilter): AppResult<DliPage> {
         delay(300)
-        val all = StaticDlis.all.map { it.toDli() }
+        val all = StaticDlis.all.map { it.toDli() }.filter { dli ->
+            val date = dli.auditDate
+            filter.from == null || date == null || (date >= filter.from && date <= (filter.to ?: filter.from))
+        }
         val totalPages = ((all.size + pageSize - 1) / pageSize).coerceAtLeast(1)
         return AppResult.Success(DliPage(all.drop((page - 1) * pageSize).take(pageSize), page, totalPages, all.size))
     }

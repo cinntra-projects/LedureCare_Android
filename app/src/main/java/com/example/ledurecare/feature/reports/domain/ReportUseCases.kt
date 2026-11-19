@@ -8,8 +8,8 @@ class GetStageSummariesUseCase @Inject constructor(private val repository: Stage
 }
 
 class GetDlisUseCase @Inject constructor(private val repository: DliRepository) {
-    suspend operator fun invoke(page: Int = 1, pageSize: Int = DLI_PAGE_SIZE): AppResult<DliPage> =
-        repository.getDliPage(page, pageSize)
+    suspend operator fun invoke(page: Int = 1, pageSize: Int = DLI_PAGE_SIZE, filter: DliFilter = DliFilter()): AppResult<DliPage> =
+        repository.getDliPage(page, pageSize, filter)
 }
 
 class GetDliDetailUseCase @Inject constructor(private val repository: DliRepository) {
