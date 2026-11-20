@@ -5,14 +5,15 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.google.services)
 }
 
 android {
-    namespace = "com.example.ledurecare"
+    namespace = "com.cinntra.ledurecare"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.ledurecare"
+        applicationId = "com.cinntra.ledurecare"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
@@ -114,6 +115,10 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.timber)
+
+    // Firebase (project "ledurecare", configured by app/google-services.json)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
 
     // Tests
     testImplementation(libs.junit)

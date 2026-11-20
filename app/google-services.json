@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "297011695300",
+    "project_id": "ledurecare",
+    "storage_bucket": "ledurecare.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:297011695300:android:08485068d6063f676d0391",
+        "android_client_info": {
+          "package_name": "com.cinntra.ledurecare"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCj6CNd8IRygBezbl_VVHSYlMz8881Zr04"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

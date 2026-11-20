@@ -2,7 +2,7 @@
     <string name="app_name">Ledure Care</string>
 
     <string name="login_logo_description">Ledure</string>
-    <string name="login_tagline_prefix">Service that keeps\nevery space </string>
+    <string name="login_tagline_prefix">Service that keeps\nevery space</string>
     <string name="login_tagline_accent">shining.</string>
     <string name="login_badge">LEDURE CARE</string>
     <string name="login_welcome">Welcome back</string>
@@ -217,6 +217,7 @@
     <string name="audit_attachments_hint">Photos or PDF · max 10 MB each</string>
     <string name="audit_attach_add">Tap to add photos or files</string>
     <string name="audit_no_camera">No camera app found</string>
+    <string name="audit_warranty_auto">Warranty status is set automatically from the manufacturing date (%1$d-month warranty).</string>
     <string name="audit_attach_upload">Upload file</string>
     <string name="audit_attach_camera">Take photo</string>
     <string name="audit_item_qty_only">Qty %1$d</string>
